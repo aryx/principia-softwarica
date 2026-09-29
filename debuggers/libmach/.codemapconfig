@@ -1,0 +1,305 @@
+// debuggers/libmach/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). From Debugger.nw ("Software architecture", "libmach types and
+// globals"). Its interface is include/debug/mach.h (Map, Symbol, Fhdr,
+// Mach, Machdata). Per architecture: ?.c the Mach (registers,
+// constants), ?db.c the Machdata (disassembler, follow set, stack
+// trace), ?obj.c the object file reader; 5 ARM (the books'), 8 x86,
+// v MIPS.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The debuggers' machine library: executables and symbol tables read, memory maps, disassemblers per architecture.",
+  files: {
+    'executable.c': {
+      summary: "Executable headers recognized (a.out of each machine, ELF): the Fhdr filled, the current machine chosen.",
+      digest: 'dc9416f1e26e',
+      capitals: [
+        { at: 'def:crackhdr', say: 'an executable read: its segments, its machine' },
+        { at: 'def:mach', say: 'the current machine: set by crackhdr' },
+      ],
+      important: [
+        { at: 'def:exectab', say: 'the magic numbers known, a reader each', weight: 3 },
+        { at: 'def:armdotout', say: 'an ARM a.out (E_MAGIC)', weight: 1 },
+        { at: 'def:elf32dotout', say: 'ELF, 32 bits', weight: 1 },
+        { at: 'code:"&mi386"', say: 'x86 by default until an a.out says otherwise', weight: 1 },
+      ],
+    },
+    'sym.c': {
+      summary: "The symbol table of an a.out read into tables: names to addresses, pcs to files and lines, frames' sizes.",
+      digest: '980a46c13d26',
+      capitals: [
+        { at: 'def:syminit', say: 'the symbols, line and sp tables loaded' },
+        { at: 'def:findsym', say: 'the symbol an address falls in' },
+      ],
+      important: [
+        { at: 'def:buildtbls', say: 'text, data and file tables sorted', weight: 2 },
+        { at: 'def:lookup', say: 'a name (in a function) to a Symbol', weight: 2 },
+        { at: 'def:fileline', say: 'a pc to file:line, by the history symbols', weight: 3 },
+        { at: 'def:pc2sp', say: "the SP offset at a pc: the linker's table", weight: 2 },
+        { at: 'def:pc2line', say: "the line table: the assembler's deltas", weight: 2 },
+        { at: 'def:getauto', say: 'a local or parameter of a frame', weight: 1 },
+      ],
+    },
+    'map.c': {
+      summary: "Maps: a process's memory as segments (text, data, stack) over files like /proc/<pid>/mem.",
+      digest: 'f962472e94da',
+      capitals: [{ at: 'def:attachproc', say: "a pid's memory and registers as a Map" }],
+      important: [
+        { at: 'def:loadmap', say: 'an executable file mapped: text and data', weight: 2 },
+        { at: 'def:setmap', say: 'a segment: [b, e) at file offset f', weight: 1 },
+        { at: 'def:findseg', say: 'a segment by name', weight: 1 },
+      ],
+    },
+    'access.c': {
+      summary: 'Reading and writing a Map: addresses translated to file offsets, bytes swapped to the target order.',
+      digest: 'da852d64a217',
+      capitals: [{ at: 'def:get4', say: 'a word from the target, in its byte order' }],
+      important: [
+        { at: 'def:put1', say: 'bytes written: how breakpoints get in', weight: 2 },
+        { at: 'def:mget', say: 'the read: the segment found, pread', weight: 2 },
+        { at: 'def:reloc', say: 'an address to a file offset', weight: 1 },
+        { at: 'def:geta', say: 'an address-sized word, 4 or 8 bytes', weight: 1 },
+      ],
+    },
+    'machdata.c': {
+      summary: "What architectures share: the current Machdata, symbol+offset printing, floats, a RISC stack trace.",
+      digest: '71a408035c36',
+      capitals: [{ at: 'def:machdata', say: 'the current machine functions' }],
+      important: [
+        { at: 'def:symoff', say: 'an address as symbol+offset', weight: 2 },
+        { at: 'def:risctrace', say: "ARM and MIPS's C traceback, by the sp table", weight: 3 },
+        { at: 'def:riscframe', say: "a function's frame found", weight: 1 },
+        { at: 'def:localaddr', say: 'a local variable, by frame', weight: 1 },
+      ],
+    },
+    'setmach.c': {
+      summary: 'The machines table: a machine chosen by its a.out type or by name (-m).',
+      digest: '14f3a4e27d7d',
+      important: [
+        { at: 'def:machbytype', say: 'Mach and Machdata set together', weight: 2 },
+        { at: 'def:machbyname', say: 'acid -m, db -m', weight: 1 },
+      ],
+    },
+    'swap.c': {
+      summary: 'Byte order: shorts, longs and vlongs swapped from big or little endian.',
+      digest: 'f65a453e5e95',
+    },
+    'obj.c': {
+      summary: "Object files and archives read for their symbols (by nm and ar): each architecture's reader behind a table.",
+      digest: 'c3b6244947b1',
+      important: [
+        { at: 'def:obj', say: 'the readers: arm .5, 386 .8, mips .v', weight: 2 },
+        { at: 'def:objtype', say: 'which architecture an object is', weight: 1 },
+        { at: 'def:readar', say: 'an archive: each member read', weight: 1 },
+      ],
+    },
+    'obj.h': {
+      summary: "The object readers' shared record: a Prog, one symbol reference.",
+      digest: '93ddf9678932',
+    },
+    'elf.h': {
+      summary: 'One ELF constant (LOAD) for executable.c.',
+      digest: 'f94c7e1b8a56',
+    },
+    '5.c': {
+      summary: 'ARM: the Mach (registers by Ureg offset, pc, sp, sizes).',
+      digest: 'f5dabfc82f8b',
+      capitals: [{ at: 'def:marm', say: 'the ARM machine' }],
+      important: [{ at: 'def:armreglist', say: "the registers, at Ureg's offsets", weight: 1 }],
+    },
+    '5db.c': {
+      summary: 'ARM debugging: exceptions, the disassembler, the follow set for single steps, the breakpoint instruction.',
+      digest: 'a9b9edd9efd7',
+      capitals: [{ at: 'def:armmach', say: "ARM's Machdata: bpinst, foll, das" }],
+      important: [
+        { at: 'def:opcodes', say: 'the instruction classes: decode, then format', weight: 2 },
+        { at: 'code:"armfoll(Map *map"', say: "the next pcs: where a step's breakpoints go", weight: 3 },
+        { at: 'code:"armcondpass(Map *map"', say: 'a condition evaluated: will it branch?', weight: 2 },
+        { at: 'code:"format(char *mnemonic"', say: 'the operands printed by a format', weight: 1 },
+        { at: 'code:.hexinst', say: 'das is inst and hexinst das: swapped names', weight: 1 },
+      ],
+    },
+    '5obj.c': {
+      summary: 'ARM object files (.5): recognized and their symbols read.',
+      digest: '53e9e012e606',
+    },
+    '8.c': {
+      summary: 'x86: the Mach (registers by Ureg offset).',
+      digest: '4f8a937f4d38',
+    },
+    '8db.c': {
+      summary: 'x86 debugging (and amd64): exceptions, the stack trace, a disassembler of opcode tables.',
+      digest: 'cd90a4752138',
+      important: [
+        { at: 'def:i386mach', say: "x86's Machdata", weight: 2 },
+        { at: 'def:optable', say: 'the one-byte opcodes, sub-tables beyond', weight: 2 },
+        { at: 'code:"mkinstr(Map *map"', say: 'an instruction decoded: prefixes, modrm', weight: 1 },
+        { at: 'code:"i386trace(Map *map"', say: 'the traceback by frame pointers', weight: 1 },
+      ],
+    },
+    '8obj.c': {
+      summary: 'x86 object files (.8): recognized and their symbols read.',
+      digest: '37d0e913166b',
+    },
+    'v.c': {
+      summary: 'MIPS: the Mach (registers by Ureg offset).',
+      digest: '0cc3f6abd1c6',
+    },
+    'vdb.c': {
+      summary: 'MIPS debugging: four Machdatas (endians, 32/64), the disassembler, the follow set.',
+      digest: 'c64d8553b71b',
+      important: [
+        { at: 'def:mipsmach', say: "MIPS's Machdata", weight: 1 },
+        { at: 'code:"mipsfoll(Map *map"', say: 'the next pcs, delay slots counted', weight: 1 },
+      ],
+    },
+    'vcodas.c': {
+      summary: "A MIPS disassembler in MIPS Co.'s own syntax, the alternative to vdb.c's.",
+      digest: 'beec49e3b84a',
+    },
+    'vobj.c': {
+      summary: 'MIPS object files (.v): recognized and their symbols read.',
+      digest: '727375e8d340',
+    },
+  },
+  skeletons: [
+    skeletons.parts('libmach: from a file to symbols, memory and instructions', [
+      ['executable.c', 'the a.out read: the Fhdr, the machine'],
+      ['setmach.c', 'the machine chosen'],
+      ['sym.c', 'the symbol, line and sp tables'],
+      ['map.c', 'the memory: segments over files'],
+      ['access.c', 'the memory read and written'],
+      ['machdata.c', 'the shared machine-dependent code'],
+      ['5db.c', "ARM's disassembler and follow set"],
+      ['obj.c', 'object files, for nm and ar'],
+    ], [
+      ['executable.c', 'setmach.c', 'the a.out type'],
+      ['executable.c', 'sym.c', 'the Fhdr: where the symbols are'],
+      ['executable.c', 'map.c', 'the segments'],
+      ['access.c', 'map.c', 'addresses translated'],
+      ['setmach.c', '5db.c', 'machdata = &armmach'],
+      ['5db.c', 'access.c', 'instructions fetched'],
+      ['machdata.c', 'sym.c', 'frames and names'],
+    ]),
+    skeletons.parts('executable.c: a header cracked', [
+      ['executable.c:def:crackhdr', 'the magic read, the table searched'],
+      ['executable.c:def:exectab', 'the known formats'],
+      ['executable.c:def:armdotout', 'an ARM a.out'],
+      ['executable.c:def:settext', 'the Fhdr filled: text, data, symbols'],
+      ['executable.c:def:mach', 'the machine set'],
+    ], [
+      ['executable.c:def:crackhdr', 'executable.c:def:exectab', 'the magic'],
+      ['executable.c:def:exectab', 'executable.c:def:armdotout', 'E_MAGIC'],
+      ['executable.c:def:armdotout', 'executable.c:def:settext', 'the sections'],
+      ['executable.c:def:crackhdr', 'executable.c:def:mach', 'the entry\'s Mach'],
+    ]),
+    skeletons.parts('sym.c: tables built, then queried', [
+      ['sym.c:def:syminit', 'the a.out symbols read'],
+      ['sym.c:def:buildtbls', 'sorted tables built'],
+      ['sym.c:def:findsym', 'address to symbol'],
+      ['sym.c:def:lookup', 'name to symbol'],
+      ['sym.c:def:fileline', 'pc to file:line'],
+      ['sym.c:def:pc2sp', 'pc to sp offset'],
+    ], [
+      ['sym.c:def:syminit', 'sym.c:def:buildtbls', 'lazily'],
+      ['sym.c:def:buildtbls', 'sym.c:def:findsym', 'text, data'],
+      ['sym.c:def:buildtbls', 'sym.c:def:lookup', 'globals, locals'],
+      ['sym.c:def:buildtbls', 'sym.c:def:fileline', 'files, history'],
+    ]),
+    skeletons.parts('map.c: segments', [
+      ['map.c:def:newmap', 'a Map'],
+      ['map.c:def:setmap', 'a segment added'],
+      ['map.c:def:loadmap', 'from an executable'],
+      ['map.c:def:attachproc', 'from a running process'],
+    ], [
+      ['map.c:def:loadmap', 'map.c:def:setmap', 'text, data'],
+      ['map.c:def:attachproc', 'map.c:def:newmap', ''],
+      ['map.c:def:attachproc', 'map.c:def:setmap', 'text, data, regs'],
+    ]),
+    skeletons.parts('access.c: get and put over a map', [
+      ['access.c:def:get4', 'a word, swapped'],
+      ['access.c:def:put1', 'bytes written'],
+      ['access.c:def:mget', 'a read at an address'],
+      ['access.c:def:reloc', 'the segment and offset'],
+      ['access.c:def:mput', 'a write at an address'],
+    ], [
+      ['access.c:def:get4', 'access.c:def:mget', 'raw bytes'],
+      ['access.c:def:mget', 'access.c:def:reloc', 'where'],
+      ['access.c:def:put1', 'access.c:def:mput', 'bytes'],
+    ]),
+    skeletons.parts('machdata.c: what machines share', [
+      ['machdata.c:def:machdata', 'the current machine'],
+      ['machdata.c:def:risctrace', 'the stack walked'],
+      ['machdata.c:def:riscframe', 'a frame found'],
+      ['machdata.c:def:symoff', 'addresses named'],
+    ], [
+      ['machdata.c:def:risctrace', 'machdata.c:def:symoff', 'each frame'],
+      ['machdata.c:def:machdata', 'machdata.c:def:risctrace', 'ctrace, on ARM and MIPS'],
+    ]),
+    skeletons.parts('5db.c: an ARM instruction decoded, printed, followed', [
+      ['5db.c:def:armmach', 'the functions the debuggers call'],
+      ['5db.c:code:"decode(Map *map"', 'a word fetched and classed'],
+      ['5db.c:def:opcodes', 'a class to a printer and a follower'],
+      ['5db.c:code:"format(char *mnemonic"', 'the text of an instruction'],
+      ['5db.c:code:"armfoll(Map *map"', 'the next pcs'],
+    ], [
+      ['5db.c:def:armmach', '5db.c:code:"armfoll(Map *map"', '.foll'],
+      ['5db.c:code:"armfoll(Map *map"', '5db.c:code:"decode(Map *map"', 'the instruction'],
+      ['5db.c:code:"decode(Map *map"', '5db.c:def:opcodes', 'its class'],
+      ['5db.c:def:opcodes', '5db.c:code:"format(char *mnemonic"', 'printed'],
+    ]),
+    skeletons.parts('8db.c: x86 by opcode tables', [
+      ['8db.c:def:i386mach', 'the functions the debuggers call'],
+      ['8db.c:code:"mkinstr(Map *map"', 'an instruction decoded'],
+      ['8db.c:def:optable', 'the opcode tables'],
+      ['8db.c:code:"prinstr(Instr *ip"', 'printed'],
+      ['8db.c:code:"i386foll(Map *map"', 'the next pcs'],
+    ], [
+      ['8db.c:def:i386mach', '8db.c:code:"i386foll(Map *map"', '.foll'],
+      ['8db.c:code:"mkinstr(Map *map"', '8db.c:def:optable', 'the opcode'],
+      ['8db.c:code:"mkinstr(Map *map"', '8db.c:code:"prinstr(Instr *ip"', 'the instruction'],
+    ]),
+    skeletons.parts('vdb.c: MIPS decoded, printed, followed', [
+      ['vdb.c:def:mipsmach', 'the functions'],
+      ['vdb.c:code:"mkinstr(uvlong pc"', 'an instruction decoded'],
+      ['vdb.c:code:"format(char *mnemonic"', 'printed'],
+      ['vdb.c:code:"mipsfoll(Map *map"', 'the next pcs'],
+    ], [
+      ['vdb.c:def:mipsmach', 'vdb.c:code:"mipsfoll(Map *map"', '.foll'],
+      ['vdb.c:code:"mkinstr(uvlong pc"', 'vdb.c:code:"format(char *mnemonic"', 'the instruction'],
+    ]),
+    skeletons.parts("vcodas.c: MIPS in MIPS Co.'s syntax", [
+      ['vcodas.c:def:_mipscoinst', 'the entry'],
+      ['vcodas.c:code:"mkinstr(Instr *i"', 'decoded'],
+      ['vcodas.c:code:"format(char *mnemonic"', 'printed'],
+    ], [
+      ['vcodas.c:def:_mipscoinst', 'vcodas.c:code:"mkinstr(Instr *i"', ''],
+      ['vcodas.c:code:"mkinstr(Instr *i"', 'vcodas.c:code:"format(char *mnemonic"', ''],
+    ]),
+    skeletons.parts('obj.c: an object by its reader', [
+      ['obj.c:def:objtype', 'which architecture'],
+      ['obj.c:def:obj', 'the readers'],
+      ['obj.c:def:readobj', 'symbols read'],
+      ['obj.c:def:readar', 'an archive'],
+    ], [
+      ['obj.c:def:objtype', 'obj.c:def:obj', 'is'],
+      ['obj.c:def:readobj', 'obj.c:def:obj', 'read'],
+      ['obj.c:def:readar', 'obj.c:def:readobj', 'each member'],
+    ]),
+    skeletons.parts('5obj.c: an ARM object', [
+      ['5obj.c:def:_is5', 'recognized'],
+      ['5obj.c:def:_read5', 'its symbols read'],
+      ['5obj.c:code:"addr(Biobuf *bp"', 'an operand skipped over'],
+    ], [
+      ['5obj.c:def:_read5', '5obj.c:code:"addr(Biobuf *bp"', 'each instruction'],
+    ]),
+    skeletons.parts('8obj.c: an x86 object', [
+      ['8obj.c:def:_is8', 'recognized'],
+      ['8obj.c:def:_read8', 'its symbols read'],
+      ['8obj.c:code:"addr(Biobuf *bp"', 'an operand skipped over'],
+    ], [
+      ['8obj.c:def:_read8', '8obj.c:code:"addr(Biobuf *bp"', 'each instruction'],
+    ]),
+  ],
+}

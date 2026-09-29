@@ -1,0 +1,89 @@
+// lib_core/libc/386/: what the code map says of it (tinybox codemap; its
+// manual: ~/github/ocaml-elm-playground/docs/manual/codemap.md). The
+// book presents ARM (../arm/); x86 is the same layer, described briefly.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libc's x86 half, ARM's twin: _main, setjmp, tas and cas, string and memory routines by REP instructions, and the vlong runtime.",
+  files: {
+    'main9.s': {
+      summary: '_main on x86: _tos from AX, the private words, argc and argv on the stack, CALL main, then exits("main").',
+      digest: 'e3ab0266638f',
+      capitals: [{ at: 'code:"TEXT _main"', say: 'where every x86 program starts' }],
+      important: [
+        { at: 'code:"_tos"', say: 'the top-of-stack struct, from the kernel in AX', weight: 2 },
+        { at: 'code:"CALL main"', say: "the program's main", weight: 3 },
+      ],
+    },
+    'main9p.s': { summary: '_mainp: _main for profiled programs, _profmain first.', digest: '1e7e1e9f6298' },
+    'argv0.s': { summary: 'The globals _main fills: _tos, _privates, _nprivates, argv0.', digest: '9580509b97b7' },
+    'setjmp.s': { summary: 'setjmp and longjmp: SP and the return PC saved and restored.', digest: '09a3189cc2b7' },
+    'notejmp.c': { summary: "notejmp: a note handler's exit by longjmp, through the saved Ureg (x86's registers).", digest: 'acca09252b7d' },
+    'tas.s': {
+      summary: '_tas: test-and-set by XCHGL, atomic on x86 without a LOCK prefix.',
+      digest: '35413e135398',
+      important: [{ at: 'code:"XCHGL"', say: 'the atomic exchange under lock()', weight: 2 }],
+    },
+    'atom.s': { summary: 'cas and ainc/adec: LOCK CMPXCHGL and LOCK XADDL.', digest: '81162d56b577' },
+    'cycles.s': { summary: 'cycles: the time-stamp counter, by RDTSC.', digest: '5ac2b78d5b8d' },
+    'getcallerpc.s': { summary: "getcallerpc: the return address below the first argument.", digest: '3db5b4344f10' },
+    'getfcr.s': { summary: "The 387's control and status words, read and set.", digest: 'a44324daec26' },
+    'memccpy.s': { summary: 'memccpy: REPN SCASB finds the byte, then memcpy.', digest: '821b21f12c7c' },
+    'memchr.s': { summary: 'memchr: one REPN SCASB.', digest: 'e5ce3fb6df1e' },
+    'memcmp.s': { summary: 'memcmp: REPE CMPSL by words, then by bytes.', digest: '0421bdce0d23' },
+    'memcpy.s': { summary: 'memcpy: REP MOVSL, backwards (STD) when the regions overlap.', digest: '460482fff78f' },
+    'memmove.s': {
+      summary: 'memmove: forward or backward by REP MOVSL, by the overlap test.',
+      digest: '658936d8dc0a',
+      important: [{ at: 'comment:"check and set for backwards"', say: 'the overlap decides the direction', weight: 2 }],
+    },
+    'memset.s': { summary: 'memset: the byte spread in a word, REP STOSL.', digest: '7023637c277c' },
+    'strcat.s': { summary: 'strcat: SCASB to both ends, then MOVSB.', digest: '5614439c8270' },
+    'strchr.s': { summary: 'strchr: a byte loop, or SCASB for the terminator.', digest: 'fdb64452fd11' },
+    'strcpy.s': { summary: 'strcpy: SCASB for the length, then MOVS.', digest: 'a71b0177b72c' },
+    'strlen.s': { summary: 'strlen: REPN SCASB for the zero.', digest: '1358a301a607' },
+    'muldiv.s': { summary: 'muldiv and umuldiv: a*b/c with a 64-bit product in EDX:EAX.', digest: 'cca49f3bc883' },
+    'sqrt.s': { summary: 'sqrt by FSQRT (the same file as 387/sqrt.s), NaN for negatives.', digest: '41ae5cae7859' },
+    'vlop.s': { summary: '_mul64by32 and _div64by32: MULL and DIVL for vlrt.c\'s division.', digest: '9b979a446cb1' },
+    'vlrt.c': {
+      summary: "The vlong runtime on x86: 64-bit operations the compiler calls, a Vlong as two words; division by the 386's DIVL when it can.",
+      digest: '1df07349372e',
+      important: [
+        { at: 'type:Vlong', say: 'lo and hi', weight: 2 },
+        { at: 'def:dodiv', say: 'DIVL when the divisor fits in 32 bits', weight: 2 },
+        { at: 'def:slowdodiv', say: 'else bit by bit', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('libc on x86: the start, the atoms, the string instructions, the runtime', [
+      ['main9.s', 'every program starts here'],
+      ['argv0.s', 'the globals it fills'],
+      ['setjmp.s', 'saved and resumed'],
+      ['tas.s', 'the atomic exchange under lock'],
+      ['memmove.s', 'memory by REP MOVS'],
+      ['vlrt.c', '64-bit arithmetic'],
+      ['vlop.s', "the 386's MULL and DIVL for it"],
+      ['387/', 'the math functions by the FPU'],
+    ], [
+      ['main9.s', 'argv0.s', 'fills'],
+      ['vlrt.c', 'vlop.s', '64 by 32'],
+    ]),
+    {
+      name: 'vlrt.c: 64 bits in two words (x86)',
+      bones: [
+        { at: 'vlrt.c:type:Vlong', role: 'lo and hi' },
+        { at: 'vlrt.c:def:_divv', role: 'signed division' },
+        { at: 'vlrt.c:def:dodiv', role: 'fast: DIVL' },
+        { at: 'vlrt.c:def:slowdodiv', role: 'slow: shift and subtract' },
+        { at: 'vlrt.c:def:vneg', role: 'signs' },
+      ],
+      joints: [
+        { from: 'vlrt.c:def:_divv', to: 'vlrt.c:def:vneg', say: 'negatives' },
+        { from: 'vlrt.c:def:_divv', to: 'vlrt.c:def:dodiv', say: 'unsigned' },
+        { from: 'vlrt.c:def:dodiv', to: 'vlrt.c:def:slowdodiv', say: 'a big divisor' },
+        { from: 'vlrt.c:type:Vlong', to: 'vlrt.c:def:dodiv', say: 'operands' },
+      ],
+    },
+  ],
+}

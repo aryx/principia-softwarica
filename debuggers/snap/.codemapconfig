@@ -1,0 +1,109 @@
+// debuggers/snap/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). snap(4): a process's /proc files and memory saved to one file;
+// snapfs serves such a file back as a /proc, for acid or db later.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "snap and snapfs: processes photographed from /proc to a file, then served back as a /proc to debug.",
+  files: {
+    'snap.h': {
+      summary: "A snapshot: a process's /proc files (segment, regs, status...) and its memory as segments of pages.",
+      digest: '641e5e832593',
+      capitals: [{ at: 'code:"struct Proc {"', say: 'a process snapped: its /proc files, its segments' }],
+      important: [
+        { at: 'code:"struct Page {"', say: 'a page, shared by all identical ones', weight: 2 },
+        { at: 'code:Psegment = 0', say: 'the /proc files kept, Npfile of them', weight: 1 },
+      ],
+    },
+    'snap.c': {
+      summary: 'snap: each pid named snapped and written to one file, a header first (who, where, which kernel).',
+      digest: '71291091df31',
+      important: [
+        { at: 'code:"snap(pid, 1)"', say: 'the process read from /proc, then written', weight: 2 },
+        { at: 'comment:get kernel compilation time', say: "#/'s mtime: which kernel it ran on", weight: 1 },
+      ],
+    },
+    'take.c': {
+      summary: "A process read from /proc: its small files whole, its memory segment by segment, pages deduplicated.",
+      digest: 'ecafe2098d0a',
+      capitals: [{ at: 'def:snap', say: "a pid's /proc files and memory, read" }],
+      important: [
+        { at: 'def:datapage', say: 'a page hashed: identical pages stored once', weight: 3 },
+        { at: 'def:readseg', say: 'a segment read in pages from /proc/<pid>/mem', weight: 2 },
+        { at: 'def:stackptr', say: 'only the used part of the stack', weight: 2 },
+        { at: 'def:readsection', say: 'a whole /proc file', weight: 1 },
+      ],
+    },
+    'write.c': {
+      summary: 'A snapshot written: each /proc file, then the segments, a shared page named by where it was first.',
+      digest: 'fd716a048ae6',
+      important: [{ at: 'def:writeseg', say: 'pages written, or a reference to a written one', weight: 2 }],
+    },
+    'read.c': {
+      summary: 'A snapshot read back into Procs: the /proc files and the segments, references to pages resolved.',
+      digest: 'b82c815d890c',
+      important: [
+        { at: 'def:readsnap', say: 'the header, then process after process', weight: 2 },
+        { at: 'def:readseg', say: 'pages, or references to earlier ones', weight: 2 },
+        { at: 'def:findpage', say: 'the page at an address in a Proc', weight: 1 },
+      ],
+    },
+    'snapfs.c': {
+      summary: 'snapfs: a snapshot served as a /proc by lib9p, each process a directory of mem, text, regs...',
+      digest: 'def7a7c2380e',
+      important: [
+        { at: 'code:"postmountsrv(&fs"', say: 'mounted before /proc: acid sees the dead process', weight: 3 },
+        { at: 'def:fsread', say: 'a read: memory from pages, files from Data', weight: 2 },
+        { at: 'def:memread', say: 'mem read across pages', weight: 1 },
+      ],
+    },
+    'util.c': {
+      summary: 'emalloc and friends: allocation or death.',
+      digest: '1880f47469ab',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('snap: processes to a file', 'snap.c:def:main', [
+      ['take.c:def:snap', 'a process read from /proc', 'each pid'],
+      ['take.c:def:datapage', 'its pages, shared when equal', 'memory'],
+      ['write.c:def:writesnap', 'written to the file', 'the Proc'],
+    ]),
+    skeletons.cmd('snapfs: a file back to a /proc', 'snapfs.c:def:main', [
+      ['read.c:def:readsnap', 'the file read into Procs', 'the snapshot'],
+      ['snapfs.c:def:ecreatefile', 'a directory per process, a file per /proc file', 'each Proc'],
+      ['snapfs.c:def:fsread', 'a 9P read answered from memory', 'mounted on /proc'],
+    ]),
+    skeletons.parts('snap: its parts', [
+      ['snap.h', 'the snapshot in memory'],
+      ['take.c', 'from /proc'],
+      ['write.c', 'to a file'],
+      ['read.c', 'from a file'],
+      ['snapfs.c', 'back to a /proc'],
+    ], [
+      ['take.c', 'write.c', 'a Proc'],
+      ['write.c', 'read.c', 'the snapshot file'],
+      ['read.c', 'snapfs.c', 'Procs'],
+    ]),
+    skeletons.parts('take.c: a process read', [
+      ['take.c:def:snap', 'the process'],
+      ['take.c:def:readsection', 'a /proc file'],
+      ['take.c:def:readseg', 'a segment'],
+      ['take.c:def:datapage', 'a page, deduplicated'],
+    ], [
+      ['take.c:def:snap', 'take.c:def:readsection', 'regs, status...'],
+      ['take.c:def:snap', 'take.c:def:readseg', 'each segment'],
+      ['take.c:def:readseg', 'take.c:def:datapage', 'each page'],
+    ]),
+    skeletons.parts('read.c: a snapshot read', [
+      ['read.c:def:readsnap', 'the processes'],
+      ['read.c:def:readdata', 'a /proc file'],
+      ['read.c:def:readseg', 'a segment'],
+      ['read.c:def:findpage', 'an earlier page'],
+    ], [
+      ['read.c:def:readsnap', 'read.c:def:readdata', 'files'],
+      ['read.c:def:readsnap', 'read.c:def:readseg', 'segments'],
+      ['read.c:def:readseg', 'read.c:def:findpage', 'references'],
+    ]),
+  ],
+}

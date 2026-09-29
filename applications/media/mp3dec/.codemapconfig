@@ -1,0 +1,255 @@
+// applications/media/mp3dec/: what the code map says of it (tinybox
+// codemap; the format: docs/manual/codemap.md, section 12). libmad
+// 0.15.1b (Robert Leslie, fixed-point MPEG audio) minimally ported to
+// Plan 9; its *.dat tables (D.dat, imdct_s.dat, qc_table.dat,
+// rq_table.dat, sf_table.dat) are #included by synth.c and layer3.c /
+// layer12.c, not sources.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'mp3dec: MPEG-1 audio (layers I, II, III) decoded to /dev/audio, over libmad in fixed-point arithmetic.',
+  files: {
+    'main.c': {
+      digest: 'ae90aebd2fe4',
+      summary: "mp3dec itself (from libmad's minimad.c): each file read, decoded, dithered to 16 bits, written to /dev/audio.",
+      capitals: [{ at: 'def:main', say: '-o file, else /dev/audio' }],
+      important: [
+        { at: 'def:play', say: "a decoder given main's three callbacks", weight: 3 },
+        { at: 'def:input', say: 'the callback: more bytes, the unused kept', weight: 2 },
+        { at: 'def:output', say: 'the callback: PCM out, interleaved 16-bit', weight: 2 },
+        { at: 'def:audiodither', say: '28 bits to 16, dithered (from mpg321)', weight: 1 },
+        { at: 'def:error', say: 'lost sync is fine; anything else fatal', weight: 1 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:play' },
+        { from: 'def:output', to: 'def:audiodither' },
+      ],
+    },
+    'decoder.c': {
+      digest: 'a205c9ca95d8',
+      summary: "The decoder object: the loop pulling input, decoding frames, synthesizing PCM, calling the user's callbacks.",
+      capitals: [{ at: 'def:run_sync', say: 'input, frame, synth, output: the loop' }],
+      important: [
+        { at: 'def:mad_decoder_init', say: 'the callbacks stored: input, header, filter, output, error', weight: 2 },
+        { at: 'def:mad_decoder_run', say: 'sync (used here) or async (a forked child)', weight: 2 },
+        { at: 'def:run_async', say: 'the async mode: messages over pipes', weight: 1 },
+        { at: 'def:error_default', say: 'a bad CRC: the frame muted', weight: 1 },
+      ],
+    },
+    'decoder.h': {
+      digest: 'ffb6131c642f',
+      summary: 'The decoder type: its stream, frame and synth, and the callbacks returning a mad_flow.',
+      important: [
+        { at: 'type:mad_decoder', say: 'the callbacks and their data', weight: 2 },
+        { at: 'type:mad_flow', say: 'continue, stop, break, ignore', weight: 1 },
+      ],
+    },
+    'stream.c': {
+      digest: 'cb33f2f1377d',
+      summary: 'The input stream: a buffer of bytes, where the next frame starts, and sync found again after garbage.',
+      important: [
+        { at: 'def:mad_stream_buffer', say: 'new bytes handed to the decoder', weight: 2 },
+        { at: 'def:mad_stream_sync', say: 'the next 11-bit sync word searched', weight: 2 },
+        { at: 'def:mad_stream_errorstr', say: 'an error code as text', weight: 1 },
+      ],
+    },
+    'stream.h': {
+      digest: '8ccb2f8e854c',
+      summary: 'The stream type (buffer, bit pointers, main data for layer III) and the decoding errors.',
+      important: [
+        { at: 'type:mad_stream', say: 'the bytes and where decoding is', weight: 2 },
+        { at: 'type:mad_error', say: 'recoverable ones have 0xff00 bits', weight: 1 },
+      ],
+    },
+    'frame.c': {
+      digest: 'c642accc1227',
+      summary: "A frame: its 32-bit header parsed (layer, bitrate, rate, mode), then its layer's decoder called.",
+      capitals: [{ at: 'def:mad_frame_decode', say: 'a header, then layer I, II or III' }],
+      important: [
+        { at: 'def:decoder_table', say: 'the layers by number: an indirect call', weight: 3 },
+        { at: 'def:decode_header', say: 'the header bits read', weight: 2 },
+        { at: 'def:mad_header_decode', say: 'sync, header, the frame length', weight: 2 },
+        { at: 'def:free_bitrate', say: 'free format: the length found by searching', weight: 1 },
+      ],
+    },
+    'frame.h': {
+      digest: 'fa943e2e5c41',
+      summary: 'The header and frame types: 2x36x32 subband samples and the overlap kept for layer III.',
+      important: [
+        { at: 'type:mad_frame', say: 'the subband samples: 2 channels x 36 x 32', weight: 2 },
+        { at: 'type:mad_header', say: 'layer, mode, bitrate, rate, duration', weight: 1 },
+      ],
+    },
+    'layer12.c': {
+      digest: 'ac8ef2b83573',
+      summary: 'Layers I and II: bit allocation, scalefactors, then samples dequantized straight into the subbands.',
+      important: [
+        { at: 'def:mad_layer_I', say: '12 samples per subband', weight: 2 },
+        { at: 'def:mad_layer_II', say: '36 samples, grouped, allocation tables', weight: 2 },
+        { at: 'def:sf_table', say: 'the scalefactors, from sf_table.dat', weight: 1 },
+        { at: 'def:bitalloc_table', say: 'allocation per bitrate and rate', weight: 1 },
+      ],
+    },
+    'layer12.h': { digest: 'd865c8eb69bc', summary: 'mad_layer_I and mad_layer_II, for frame.c.' },
+    'layer3.c': {
+      digest: 'b4c0bb1ab24c',
+      summary: 'Layer III (MP3): side info, Huffman-coded spectrum, requantization, stereo, IMDCT to the subbands.',
+      capitals: [{ at: 'def:mad_layer_III', say: 'main data gathered across frames' }],
+      important: [
+        { at: 'type:sideinfo', say: 'granules and channels: where data lies', weight: 2 },
+        { at: 'def:III_decode', say: 'a granule: the steps in order', weight: 3 },
+        { at: 'def:III_huffdecode', say: '576 lines from the Huffman tables', weight: 2 },
+        { at: 'def:III_requantize', say: 'x^(4/3) * 2^exp, in fixed point', weight: 2 },
+        { at: 'def:III_stereo', say: 'mid/side and intensity stereo', weight: 1 },
+        { at: 'def:III_imdct_l', say: 'the long blocks back to time', weight: 1 },
+        { at: 'def:III_overlap', say: 'half of each block added to the next', weight: 1 },
+      ],
+    },
+    'layer3.h': { digest: '2dc89aecfb50', summary: 'mad_layer_III, for frame.c.' },
+    'huffman.c': {
+      digest: '81a1b30e47e9',
+      summary: "Layer III's Huffman tables (ISO 11172-3 Table B.7) as trees read 4 bits at a time.",
+      important: [
+        { at: 'def:mad_huff_pair_table', say: 'the 32 big-value tables, with linbits', weight: 2 },
+        { at: 'def:mad_huff_quad_table', say: 'the count1 region: quadruples', weight: 1 },
+        { at: 'def:PTR', say: 'an entry pointing further down the tree', weight: 1 },
+      ],
+    },
+    'huffman.h': {
+      digest: '045ac6f63c97',
+      summary: 'The Huffman entry types: a pair or quad value, or a pointer and how many more bits.',
+      important: [{ at: 'type:huffpair', say: 'final (x, y, hlen) or ptr (bits, offset)', weight: 2 }],
+    },
+    'synth.c': {
+      digest: '89de6386b308',
+      summary: 'The polyphase filterbank: 32 subbands back to PCM, a 32-point DCT and the D window per slot.',
+      capitals: [{ at: 'def:mad_synth_frame', say: 'a frame of subbands to PCM' }],
+      important: [
+        { at: 'def:dct32', say: 'the fast 32-point DCT', weight: 2 },
+        { at: 'def:synth_full', say: 'the windowing: 16 phases, MLA chains', weight: 2 },
+        { at: 'def:synth_half', say: 'half the sample rate, half the work', weight: 1 },
+      ],
+    },
+    'synth.h': {
+      digest: 'be6cbffe8bc6',
+      summary: 'The synth type: its filter state and the PCM it made (rate, channels, samples).',
+      important: [{ at: 'type:mad_pcm', say: "the output handed to main's callback", weight: 2 }],
+    },
+    'bit.c': {
+      digest: '8a96588b69ac',
+      summary: 'The bit reader every layer uses: a byte pointer and a bit offset; the CRC-16 check.',
+      capitals: [{ at: 'def:mad_bit_read', say: 'up to 32 bits read' }],
+      important: [
+        { at: 'def:mad_bit_crc', say: 'the CRC over len bits', weight: 1 },
+        { at: 'def:mad_bit_skip', say: 'bits skipped', weight: 1 },
+      ],
+    },
+    'bit.h': { digest: 'edbe00fe76c8', summary: 'The bit pointer type and its operations.' },
+    'fixed.c': { digest: '096c1b6945bf', summary: 'Fixed-point absolute value and division (the rest are macros in fixed.h).' },
+    'fixed.h': {
+      digest: 'c06417428254',
+      summary: 'The fixed-point numbers: 4.28 bits in 32, multiplication by 64-bit product and shift, per CPU.',
+      important: [
+        { at: 'type:mad_fixed_t', say: 'a sample, -8 to 8, 28 bits of fraction', weight: 2 },
+        { at: 'comment:Fixed-point format', say: 'why 28 bits: 8.6 decimal digits', weight: 2 },
+      ],
+    },
+    'timer.h': { digest: 'e10fdfe23c75', summary: 'Time as seconds and fractions of 352800000: exact for every sample rate.' },
+    'version.c': { digest: '5a5c4486691f', summary: "libmad's version, copyright and build strings." },
+    'version.h': { digest: 'e30deaaf0dab', summary: 'The version numbers: 0.15.1b.' },
+    'global.h': { digest: '3515e2399ecb', summary: "libmad's global options (OPT_SSO...) set for Plan 9." },
+    'mad.h': {
+      digest: 'bb8ee1372211',
+      summary: "libmad's public header: the other headers concatenated, what main.c includes.",
+    },
+  },
+  skeletons: [
+    skeletons.cmd('mp3dec: bytes in, samples out', 'main.c:def:main', [
+      ['main.c:def:play', 'a decoder per file', 'each file'],
+      ['decoder.c:def:run_sync', 'the loop over frames', 'mad_decoder_run'],
+      ['frame.c:def:mad_frame_decode', 'a header, then its layer', 'the stream'],
+      ['layer3.c:def:mad_layer_III', 'MP3: the spectrum to subband samples', 'decoder_table (a pointer)'],
+      ['synth.c:def:mad_synth_frame', 'the subbands to PCM', 'the frame'],
+      ['main.c:def:output', 'dithered and written to /dev/audio', 'output_func (a callback)'],
+    ]),
+    skeletons.chain('The decoder object: callbacks around a loop', [
+      ['decoder.c:def:mad_decoder_init', 'the callbacks stored', ''],
+      ['decoder.c:def:mad_decoder_run', 'sync or async', 'then run'],
+      ['decoder.c:def:run_sync', 'input, header, frame, synth, output', 'sync mode'],
+      ['decoder.c:def:error_default', 'a bad frame muted', 'no error callback'],
+      ['decoder.c:def:run_async', 'a child decoding, messages over a pipe', 'or async'],
+      ['decoder.c:def:mad_decoder_finish', 'the child waited for', 'done'],
+    ]),
+    skeletons.chain('A stream: bytes to the next frame', [
+      ['stream.c:def:mad_stream_init', 'an empty stream', ''],
+      ['stream.c:def:mad_stream_buffer', 'bytes handed in', 'input'],
+      ['stream.c:def:mad_stream_sync', 'the sync word sought', 'lost sync'],
+      ['stream.c:def:mad_stream_errorstr', 'an error said', 'on error'],
+    ]),
+    skeletons.chain('A frame: its header, then its layer', [
+      ['frame.c:def:mad_frame_decode', 'a frame wanted', ''],
+      ['frame.c:def:mad_header_decode', 'sync found, the length known', 'first'],
+      ['frame.c:def:decode_header', 'the 32 header bits', 'the bits'],
+      ['frame.c:def:decoder_table', 'the layer chosen', 'the layer number'],
+      ['layer12.c:def:mad_layer_II', 'or layer I, II', 'indirect call'],
+    ]),
+    skeletons.chain('Layers I and II: allocation, scalefactors, samples', [
+      ['layer12.c:def:mad_layer_II', 'layer II: allocation, scale factors', ''],
+      ['layer12.c:def:bitalloc_table', 'which tables for this bitrate', 'the bitrate'],
+      ['layer12.c:def:II_samples', 'three samples, maybe grouped', 'each subband'],
+      ['layer12.c:def:sf_table', 'scaled', 'a scalefactor'],
+      ['layer12.c:def:mad_layer_I', 'layer I, simpler: 12 samples', 'the same idea'],
+    ]),
+    skeletons.chain('Layer III: a granule decoded', [
+      ['layer3.c:def:mad_layer_III', 'side info, main data joined', ''],
+      ['layer3.c:def:III_decode', 'each granule and channel', 'the main data'],
+      ['layer3.c:def:III_huffdecode', 'the spectrum, Huffman-coded', 'part2_3 bits'],
+      ['layer3.c:def:III_requantize', 'values scaled', 'each value'],
+      ['layer3.c:def:III_stereo', 'the channels undone', '576 lines'],
+      ['layer3.c:def:III_imdct_l', 'frequency to time', 'each subband'],
+      ['layer3.c:def:III_overlap', 'overlap-added into the frame', '36 samples'],
+    ]),
+    skeletons.chain("Layer III's Huffman tables", [
+      ['huffman.h:type:huffpair', 'an entry: a value or a pointer', ''],
+      ['huffman.c:def:PTR', 'further bits to read', 'a pointer'],
+      ['huffman.c:def:mad_huff_pair_table', 'the 32 tables for big values', 'the tables'],
+      ['huffman.c:def:mad_huff_quad_table', 'the 2 for count1', 'and'],
+      ['layer3.c:def:III_huffdecode', 'walks them 4 bits at a time', 'used by'],
+    ]),
+    skeletons.chain('The synthesis filterbank', [
+      ['synth.c:def:mad_synth_frame', 'full or half rate', ''],
+      ['synth.c:def:synth_full', 'per slot: DCT then window', 'full rate'],
+      ['synth.c:def:dct32', 'the 32 subbands transformed', 'each slot'],
+      ['synth.h:type:mad_pcm', 'the samples made', 'the PCM'],
+    ]),
+    skeletons.chain('The bit reader', [
+      ['bit.h:type:mad_bitptr', 'a byte and a bit position', ''],
+      ['bit.c:def:mad_bit_init', 'at a byte', 'set'],
+      ['bit.c:def:mad_bit_read', 'n bits taken', 'read'],
+      ['bit.c:def:mad_bit_crc', 'the header checked', 'bits'],
+      ['layer3.c:def:III_sideinfo', 'its main user', 'read by'],
+    ]),
+    skeletons.parts('libmad: the stages of a decoder', [
+      ['main.c', 'the program: files and /dev/audio'],
+      ['decoder.c', 'the loop and callbacks'],
+      ['stream.c', 'the bytes, and sync'],
+      ['frame.c', 'a header, then its layer'],
+      ['layer12.c', 'layers I and II'],
+      ['layer3.c', 'layer III, MP3'],
+      ['huffman.c', "layer III's code tables"],
+      ['synth.c', 'subbands to PCM'],
+      ['bit.c', 'bits read'],
+      ['fixed.h', 'the arithmetic'],
+    ], [
+      ['main.c', 'decoder.c', 'callbacks'],
+      ['decoder.c', 'stream.c', 'input'],
+      ['decoder.c', 'frame.c', 'a frame'],
+      ['frame.c', 'layer12.c', 'decoder_table'],
+      ['frame.c', 'layer3.c', 'decoder_table'],
+      ['layer3.c', 'huffman.c', 'tables'],
+      ['decoder.c', 'synth.c', 'the subbands'],
+      ['layer3.c', 'bit.c', 'reads'],
+      ['synth.c', 'fixed.h', 'multiplies'],
+    ]),
+  ],
+}

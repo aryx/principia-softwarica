@@ -1,0 +1,151 @@
+// linkers/8l/: what the code map says of it (tinybox codemap). The book:
+// ../Linker_x86.nw. 5l's twin for the 386; the mkfile also compiles
+// ../lk/pe.c in, for Windows executables (-H10).
+local skeletons = import '../../skeletons.libsonnet';
+local M(f, name, steps) = skeletons.chain(name, [[f + ':' + s[0], s[1], s[2]] for s in steps]);
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "8l, the x86 linker: 5l's twin, instructions encoded by the 386's table of operand forms, ELF and PE output too.",
+  files: {
+    'l.h': {
+      digest: '704b8e5cf7c7',
+      summary: "8l's types: Prog, Adr, Sym, Auto, and Optab (an opcode with its table of operand forms).",
+      capitals: [
+        { at: 'type:Prog', say: 'an instruction loaded' },
+        { at: 'type:Sym', say: 'a global symbol' },
+      ],
+      important: [{ at: 'type:Optab', say: 'an opcode: its forms and bytes', weight: 2 }],
+    },
+    'obj.c': {
+      digest: '97e8ad466627',
+      summary: 'main and loading: the flags and header types, objects and libraries read into Progs, then the passes.',
+      capitals: [
+        { at: 'def:main', say: '8l starts here' },
+        { at: 'def:ldobj', say: "an object's instructions loaded" },
+      ],
+      important: [
+        { at: 'code:"patch();"', say: 'then the passes, as 5l', weight: 2 },
+        { at: 'comment:"dopepe()/peimports() lays out the .idata section"', say: 'PE: span twice', weight: 1 },
+        { at: 'def:objfile', say: 'an object or an archive', weight: 1 },
+        { at: 'def:loadlib', say: 'library members pulled in', weight: 1 },
+      ],
+    },
+    'pass.c': {
+      digest: 'af8e67ca8c99',
+      summary: 'Resolving: branches patched, code reordered along its flow, data laid out, stack frames (dostkoff).',
+      capitals: [{ at: 'def:patch', say: 'branches to targets' }],
+      important: [
+        { at: 'def:follow', say: 'flow order', weight: 1 },
+        { at: 'def:dodata', say: 'data addresses', weight: 1 },
+        { at: 'def:dostkoff', say: 'frames: SP adjusted', weight: 2 },
+      ],
+    },
+    'span.c': {
+      digest: '0ae75d51f8f6',
+      summary: 'span: each instruction sized and placed until stable, and asmins encoding x86 bytes (prefixes, ModR/M, SIB).',
+      capitals: [{ at: 'def:span', say: 'sizes until branches settle' }],
+      important: [
+        { at: 'def:doasm', say: 'an instruction: its form found, bytes out', weight: 3 },
+        { at: 'def:oclass', say: "an operand's class", weight: 2 },
+        { at: 'def:asmand', say: 'ModR/M and SIB', weight: 2 },
+        { at: 'def:asmsym', say: 'the symbol table', weight: 1 },
+      ],
+    },
+    'optab.c': {
+      digest: '9207779d8b5f',
+      summary: "The x86 tables: per opcode, its forms (ytab: operand classes, encoding kind) and opcode bytes.",
+      important: [
+        { at: 'def:optab', say: 'the opcodes', weight: 2 },
+        { at: 'def:ymovl', say: 'MOVL: its many forms', weight: 1 },
+      ],
+    },
+    'asm.c': {
+      digest: '64887d6861e0',
+      summary: 'asmb: the executable written, text, data, symbols, and the header of the chosen type (Plan 9, ELF, PE...).',
+      capitals: [{ at: 'def:asmb', say: 'the executable written' }],
+      important: [{ at: 'def:datblk', say: 'data bytes', weight: 1 }],
+    },
+    'elf.c': {
+      digest: '35f4bd2d207d',
+      summary: 'An ELF32 header and its program and section headers.',
+      important: [{ at: 'def:elf32', say: 'the ELF headers', weight: 2 }],
+    },
+    'elf_.h': { digest: '9c5c62d1086b', summary: "ELF's header sizes and elf32's interface." },
+    'list.c': { digest: 'b05499a79d51', summary: 'Printing Progs and operands, and diag.' },
+    'utils.c': { digest: 'c3a775e74b8f', summary: 'lookup, prg and copyp, errorexit.' },
+    'compat.c': { digest: '20cd62a980ae', summary: 'The old fake malloc, disabled: it recursed through gethunk on macOS.' },
+    'globals.c': { digest: '68f48836958b', summary: "8l's globals: the Prog lists, the symbols, flags and sizes." },
+  },
+  skeletons: [
+    skeletons.cmd('8l: load, resolve, generate', 'obj.c:def:main', [
+      ['obj.c:def:objfile', 'each file', 'loading'],
+      ['obj.c:def:ldobj', 'Progs', 'an object'],
+      ['pass.c:def:patch', 'branches', 'resolving'],
+      ['pass.c:def:dostkoff', 'frames', 'then'],
+      ['span.c:def:span', 'addresses and sizes', 'then'],
+      ['asm.c:def:asmb', 'the file', 'generating'],
+    ]),
+    skeletons.parts("8l's files", [
+      ['obj.c', 'loading'],
+      ['pass.c', 'resolving'],
+      ['span.c', 'encoding'],
+      ['optab.c', 'the forms'],
+      ['asm.c', 'the file'],
+      ['elf.c', 'ELF'],
+      ['../lk/', 'PE'],
+    ], [
+      ['obj.c', 'pass.c', 'Progs'],
+      ['pass.c', 'span.c', 'resolved'],
+      ['span.c', 'optab.c', 'looks up'],
+      ['asm.c', 'elf.c', 'ELF headers'],
+      ['asm.c', '../lk/', 'PE'],
+    ]),
+    M('obj.c', 'The driver and the loader', [
+      ['def:main', 'the passes', ''],
+      ['def:objfile', 'a file', 'loads'],
+      ['def:ldobj', 'its instructions', 'decoded'],
+      ['def:loadlib', 'libraries', 'then'],
+    ]),
+    M('pass.c', 'Resolving', [
+      ['def:patch', 'branches', ''],
+      ['def:follow', 'flow', 'reordered'],
+      ['def:dodata', 'data', 'placed'],
+      ['def:dostkoff', 'frames', 'then'],
+    ]),
+    M('span.c', 'Encoding x86', [
+      ['def:span', 'until stable', ''],
+      ['def:asmins', 'an instruction', 'each'],
+      ['def:doasm', 'its form and bytes', 'encoded'],
+      ['def:oclass', 'operand classes', 'classified'],
+      ['def:asmand', 'ModR/M', 'operands'],
+    ]),
+    M('optab.c', 'The x86 tables', [
+      ['def:ynone', 'a form list: no operands', ''],
+      ['def:ymovl', "MOVL's forms", 'e.g.'],
+      ['def:optab', 'each opcode to its forms and bytes', 'named by'],
+    ]),
+    M('asm.c', 'The file', [
+      ['def:asmb', 'everything', ''],
+      ['def:entryvalue', 'the entry', 'header'],
+      ['def:datblk', 'data', 'then'],
+    ]),
+    M('elf.c', 'ELF', [
+      ['def:elf32', 'the whole header', ''],
+      ['def:elf32phdr', 'program headers', 'segments'],
+      ['def:elf32shdr', 'section headers', 'sections'],
+    ]),
+    M('list.c', 'Printing', [
+      ['def:listinit', 'formats', ''],
+      ['def:Pconv', 'a Prog', '%P'],
+      ['def:Dconv', 'an operand', '%D'],
+    ]),
+    M('globals.c', 'The global state', [
+      ['def:firstp', 'code', ''],
+      ['def:datap', 'data', 'and'],
+      ['def:hash', 'symbols', 'named'],
+    ]),
+  ],
+  views: [
+    { name: '8l and 5l', files: ['obj.c', '../5l/main.c', '../5l/obj.c', 'pass.c', '../5l/pass.c', 'span.c', '../5l/span.c', 'asm.c', '../5l/asm.c'] },
+  ],
+}

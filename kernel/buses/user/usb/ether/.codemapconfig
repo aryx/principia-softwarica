@@ -1,0 +1,130 @@
+// kernel/buses/user/usb/ether/: what the code map says of it (tinybox
+// codemap; the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12)
+local skeletons = import '../../../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "usb/ether: USB Ethernet (the Pi's own SMSC chip among them), handed to the kernel's #l, else served as an ether(3) tree.",
+  files: {
+    'ether.c': {
+      digest: '69310fce884a',
+      summary: "The adapter-independent half: the chip found, its endpoints opened, then bound into the kernel's #l0 or served as files.",
+      capitals: [
+        { at: 'def:ethermain', say: 'an adapter: chip, endpoints, kernel or files' },
+      ],
+      important: [
+        { at: 'comment:"This should use /dev/etherfile"', say: "the author's wish, half done: kernelproxy", weight: 1 },
+        { at: 'def:ethers', say: 'the chips tried in turn, cdc last', weight: 2 },
+        { at: 'def:kernelproxy', say: "the endpoints handed to the kernel's ether device", weight: 3 },
+        { at: 'def:etherreadproc', say: 'packets read, to the connections of their type', weight: 2 },
+        { at: 'def:etherwriteproc', say: 'packets written, from any connection', weight: 1 },
+        { at: 'def:fsopen', say: 'clone: a new connection, as in #l', weight: 1 },
+        { at: 'def:etherctl', say: "'connect 0x800', 'promiscuous'...", weight: 1 },
+      ],
+      links: [
+        { from: 'def:ethermain', to: 'def:kernelproxy' },
+        { from: 'def:ethermain', to: 'def:etherreadproc' },
+      ],
+      related: ['../../../../network/arm/devether.c'],
+    },
+    'ether.h': {
+      digest: 'bc79cdec7a58',
+      summary: 'Ether (an adapter and its chip-specific functions), Conn (a connection, a packet type), Buf (a packet).',
+      important: [
+        { at: 'type:Ether', say: 'an adapter: endpoints, connections, operations', weight: 3 },
+        { at: 'type:Conn', say: 'a connection: its type, its reader', weight: 1 },
+        { at: 'type:Buf', say: 'a packet, recycled', weight: 1 },
+        { at: 'type:Cinfo', say: 'a chip by vendor and device id', weight: 1 },
+      ],
+    },
+    'asix.c': {
+      digest: 'e2ab9b00a34a',
+      summary: 'ASIX AX88178/AX88772 adapters: registers by control requests, packets framed with a length word.',
+      important: [
+        { at: 'comment:"I got no documentation for it"', say: 'reverse-engineered from other systems', weight: 1 },
+        { at: 'def:asixreset', say: 'the chip recognized, its functions set', weight: 2 },
+        { at: 'def:ctlrinit', say: 'GPIO, PHY, MAC: the chip woken', weight: 2 },
+        { at: 'def:asixbread', say: 'a transfer split into packets by their headers', weight: 2 },
+        { at: 'def:asixset', say: 'a vendor control request', weight: 1 },
+      ],
+    },
+    'smsc.c': {
+      digest: '103570c231dd',
+      summary: "The SMSC LAN95xx, the Raspberry Pi's on-board Ethernet: registers through control requests, bursts of packets.",
+      important: [
+        { at: 'def:smscreset', say: 'the chip recognized, its functions set', weight: 2 },
+        { at: 'def:smscinit', say: 'reset, MAC, PHY, burst mode', weight: 2 },
+        { at: 'def:smscbread', say: 'a burst split into packets', weight: 2 },
+        { at: 'def:wr', say: 'a register written by a control request', weight: 1 },
+      ],
+    },
+    'cdc.c': {
+      digest: 'da7ce44002ef',
+      summary: 'The standard CDC Ethernet class: only its MAC address to read, the rest is generic.',
+      important: [{ at: 'def:cdcreset', say: 'the fallback, any CDC device', weight: 1 }],
+    },
+    'main.c': {
+      digest: '30d4927fb1de',
+      summary: 'usb/ether as a program: a file server started, the Ethernet adapters found.',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('usb/ether: an adapter, to the kernel or as files', 'main.c:def:threadmain', [
+      ['../lib/devs.c:def:startdevs', 'the adapters found', 'matchether'],
+      ['ether.c:def:ethermain', 'an adapter', 'each'],
+      ['smsc.c:def:smscreset', 'the chip: SMSC, ASIX or CDC', 'ethers[]'],
+      ['ether.c:def:kernelproxy', "bound into #l0", 'endpoints'],
+      ['../../../../network/arm/devether.c', "the kernel's ether device reads the endpoints", "'bind' to its clone"],
+    ]),
+    {
+      name: 'An adapter: a chip below, connections above',
+      bones: [
+        { at: 'ether.c:def:ethermain', role: 'the adapter set up' },
+        { at: 'ether.h:type:Ether', role: "the chip's operations" },
+        { at: 'ether.c:def:kernelproxy', role: 'the kernel does the rest' },
+        { at: 'ether.c:def:etherreadproc', role: 'or: packets in' },
+        { at: 'ether.c:def:etherwriteproc', role: 'packets out' },
+        { at: 'ether.c:def:fsopen', role: 'a connection opened' },
+      ],
+      joints: [
+        { from: 'ether.c:def:ethermain', to: 'ether.h:type:Ether', say: 'filled by a reset' },
+        { from: 'ether.c:def:ethermain', to: 'ether.c:def:kernelproxy', say: 'first' },
+        { from: 'ether.h:type:Ether', to: 'ether.c:def:etherreadproc', say: 'e->bread' },
+        { from: 'ether.c:def:etherreadproc', to: 'ether.c:def:fsopen', say: "a packet to its connection's reader" },
+        { from: 'ether.c:def:fsopen', to: 'ether.c:def:etherwriteproc', say: 'writes' },
+      ],
+    },
+    {
+      name: 'An ASIX chip',
+      bones: [
+        { at: 'asix.c:def:asixreset', role: 'recognized' },
+        { at: 'asix.c:def:ctlrinit', role: 'initialized' },
+        { at: 'asix.c:def:asixset', role: 'a control request' },
+        { at: 'asix.c:def:asixbread', role: 'packets in' },
+        { at: 'asix.c:def:asixbwrite', role: 'packets out' },
+      ],
+      joints: [
+        { from: 'asix.c:def:asixreset', to: 'asix.c:def:ctlrinit', say: 'e->init' },
+        { from: 'asix.c:def:ctlrinit', to: 'asix.c:def:asixset', say: 'registers' },
+        { from: 'asix.c:def:asixreset', to: 'asix.c:def:asixbread', say: 'e->bread' },
+        { from: 'asix.c:def:asixreset', to: 'asix.c:def:asixbwrite', say: 'e->bwrite' },
+      ],
+    },
+    {
+      name: "The Pi's SMSC chip",
+      bones: [
+        { at: 'smsc.c:def:smscreset', role: 'recognized' },
+        { at: 'smsc.c:def:smscinit', role: 'initialized' },
+        { at: 'smsc.c:def:wr', role: 'a register' },
+        { at: 'smsc.c:def:smscbread', role: 'a burst in' },
+        { at: 'smsc.c:def:smscbwrite', role: 'a packet out' },
+      ],
+      joints: [
+        { from: 'smsc.c:def:smscreset', to: 'smsc.c:def:smscinit', say: 'e->init' },
+        { from: 'smsc.c:def:smscinit', to: 'smsc.c:def:wr', say: 'registers' },
+        { from: 'smsc.c:def:smscreset', to: 'smsc.c:def:smscbread', say: 'e->bread' },
+        { from: 'smsc.c:def:smscreset', to: 'smsc.c:def:smscbwrite', say: 'e->bwrite' },
+      ],
+    },
+  ],
+}

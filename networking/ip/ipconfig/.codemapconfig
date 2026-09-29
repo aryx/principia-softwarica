@@ -1,0 +1,98 @@
+// networking/ip/ipconfig/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'ipconfig: an interface bound to the IP stack and given an address, by hand, by DHCP, or by IPv6 router ads.',
+  files: {
+    'main.c': {
+      summary: 'ipconfig: the device bound in /net/ipifc, an address added (a DHCP client if asked), ndb updated.',
+      digest: 'b305dc122db1',
+      capitals: [{ at: 'def:main', say: 'parse the verb, then add, remove, or v6' }],
+      important: [
+        { at: 'def:conf', say: 'everything learned or given, in one global', weight: 2 },
+        { at: 'def:doadd', say: 'bind, DHCP if needed, configure, write ndb', weight: 3 },
+        { at: 'def:binddevice', say: '"bind ether /net/ether0" on a new ipifc', weight: 2 },
+        { at: 'def:dhcpquery', say: 'DISCOVER, OFFER, REQUEST, ACK', weight: 3 },
+        { at: 'def:dhcpwatch', say: 'a process renewing the lease', weight: 2 },
+        { at: 'def:ip4cfg', say: '"add ip mask" written to the ipifc ctl', weight: 2 },
+        { at: 'def:putndb', say: 'what DHCP said, written to /net/ndb', weight: 1 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:doadd' },
+        { from: 'def:doadd', to: 'def:dhcpquery' },
+        { from: 'def:doadd', to: 'def:ip4cfg' },
+      ],
+    },
+    'ipv6.c': {
+      summary: 'ipconfig for IPv6: router solicitations sent, advertisements read (or sent, as a router), prefixes configured.',
+      digest: '111905654bda',
+      capitals: [{ at: 'def:doipv6', say: 'the v6 verbs' }],
+      important: [
+        { at: 'def:ip6cfg', say: 'the link-local address added', weight: 2 },
+        { at: 'def:recvra6', say: 'router advertisements: prefixes, routes', weight: 2 },
+        { at: 'def:sendra6', say: 'as a router: advertisements sent', weight: 1 },
+      ],
+    },
+    'ipconfig.h': {
+      summary: "ipconfig's types: Conf (the interface's whole configuration), Ctl, and the IPv6 ND message layouts.",
+      digest: '39cb67393cae',
+      capitals: [{ at: 'code:"struct Conf"', say: 'Conf: the interface being configured' }],
+      important: [{ at: 'type:Routeradv', say: 'a router advertisement on the wire', weight: 1 }],
+    },
+    'ppp.c': { summary: 'PPP: the device bound by starting ppp, which configures itself.', digest: '15d6c4f5eb5b' },
+  },
+  skeletons: [
+    skeletons.cmd('ipconfig: an interface configured', 'main.c:def:main', [
+      ['main.c:def:parseargs', 'the verb and the device', 'argv'],
+      ['main.c:def:doadd', 'add: the steps in order', 'add'],
+      ['main.c:def:binddevice', 'the device bound to an ipifc', '/net/ipifc/clone'],
+      ['main.c:def:dhcpquery', 'an address from DHCP', 'no address given'],
+      ['main.c:def:ip4cfg', 'the address added', 'Conf'],
+      ['main.c:def:putndb', 'the result in /net/ndb', 'dns, gateway...'],
+    ]),
+    {
+      name: 'The DHCP client: main.c',
+      bones: [
+        { at: 'main.c:def:dhcpquery', role: 'the exchange driven' },
+        { at: 'main.c:def:dhcpsend', role: 'DISCOVER or REQUEST built' },
+        { at: 'main.c:def:dhcprecv', role: 'OFFER or ACK parsed' },
+        { at: 'main.c:def:parseoptions', role: 'the options' },
+        { at: 'main.c:def:dhcpwatch', role: 'the lease renewed' },
+      ],
+      joints: [
+        { from: 'main.c:def:dhcpquery', to: 'main.c:def:dhcpsend', say: 'the state' },
+        { from: 'main.c:def:dhcpsend', to: 'main.c:def:dhcprecv', say: 'udp 67 to 68' },
+        { from: 'main.c:def:dhcprecv', to: 'main.c:def:parseoptions', say: 'the packet' },
+        { from: 'main.c:def:dhcprecv', to: 'main.c:def:dhcpwatch', say: 'the lease' },
+      ],
+    },
+    {
+      name: 'IPv6 autoconfiguration: ipv6.c',
+      bones: [
+        { at: 'ipv6.c:def:doipv6', role: 'the v6 verbs' },
+        { at: 'ipv6.c:def:ip6cfg', role: 'link-local address' },
+        { at: 'ipv6.c:def:sendrs', role: 'router solicitation' },
+        { at: 'ipv6.c:def:recvra6', role: 'advertisements read' },
+        { at: 'ipv6.c:def:recvrahost', role: 'prefixes configured' },
+      ],
+      joints: [
+        { from: 'ipv6.c:def:doipv6', to: 'ipv6.c:def:ip6cfg', say: '' },
+        { from: 'ipv6.c:def:doipv6', to: 'ipv6.c:def:recvra6', say: 'a process' },
+        { from: 'ipv6.c:def:recvra6', to: 'ipv6.c:def:sendrs', say: 'solicit first' },
+        { from: 'ipv6.c:def:recvra6', to: 'ipv6.c:def:recvrahost', say: 'an RA' },
+      ],
+    },
+    skeletons.parts('ipconfig', [
+      ['main.c', 'IPv4, DHCP, the verbs'],
+      ['ipv6.c', 'IPv6'],
+      ['ppp.c', 'PPP'],
+      ['ipconfig.h', 'Conf'],
+      ['../../../kernel/network/', '/net/ipifc: what is configured'],
+    ], [
+      ['main.c', 'ipv6.c', 'v6 verbs'],
+      ['main.c', 'ppp.c', 'ppp media'],
+      ['main.c', '../../../kernel/network/', 'ctl writes'],
+    ]),
+  ],
+}

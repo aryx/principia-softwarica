@@ -1,0 +1,313 @@
+// linkers/5l/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12). The
+// book: ../Linker.nw ("Software architecture": main -> objfile -> ldobj;
+// patch, dodata, follow, noops, dotext; asmb -> datblk, asmout).
+local skeletons = import '../../skeletons.libsonnet';
+local M(f, name, steps) = skeletons.chain(name, [[f + ':' + s[0], s[1], s[2]] for s in steps]);
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: '5l, the ARM linker: objects and libraries loaded, symbols resolved, code laid out and encoded, the a.out written.',
+  files: {
+    'l.h': {
+      digest: 'd74e63335264',
+      summary: "The linker's world: Prog (an instruction loaded from an object), Adr, Sym (a global symbol, its kind and value), Auto.",
+      capitals: [
+        { at: 'type:Prog', say: 'an instruction, as the object had it' },
+        { at: 'type:Sym', say: 'a global: its kind (STEXT, SXREF...), value' },
+      ],
+      important: [
+        { at: 'type:Adr', say: 'an operand', weight: 2 },
+        { at: 'type:Auto', say: 'a local, for the debugger', weight: 1 },
+        { at: 'code:"SXREF,"', say: 'referenced, not yet defined', weight: 2 },
+      ],
+    },
+    'm.h': {
+      digest: '1bd236a492f8',
+      summary: 'The instruction forms: Optab, one line per shape of operands with its size and encoding case.',
+      important: [{ at: 'type:Optab', say: 'an opcode, its operand classes, size, case', weight: 3 }],
+    },
+    'main.c': {
+      digest: 'fda8e33b946a',
+      summary: 'main: the flags (-H header type, -T text address...), the objects loaded, then the passes in order.',
+      capitals: [{ at: 'def:main', say: '5l starts here: load, resolve, generate' }],
+      important: [
+        { at: 'code:"objfile(*argv++)"', say: 'each object and library loaded', weight: 2 },
+        { at: 'code:"patch();"', say: 'branches resolved', weight: 2 },
+        { at: 'comment:"match the kencc pass order"', say: 'why follow() before noops()', weight: 3 },
+        { at: 'code:"asmb();"', say: 'the executable written', weight: 2 },
+        { at: 'def:undef', say: 'undefined symbols reported', weight: 1 },
+      ],
+    },
+    'obj.c': {
+      digest: 'b29a59adb73d',
+      summary: 'Loading: an object or an archive read, its instructions decoded into Progs, text and data chained globally.',
+      capitals: [{ at: 'def:ldobj', say: "an object's instructions into memory" }],
+      important: [
+        { at: 'def:objfile', say: 'a file: an object, or a library\'s members', weight: 2 },
+        { at: 'def:inopd', say: 'an operand decoded', weight: 1 },
+        { at: 'def:nopout', say: 'an instruction made a NOP', weight: 1 },
+      ],
+      related: ['../../include/obj/5.out.h'],
+    },
+    'lib.c': {
+      digest: 'afc3485ea0ed',
+      summary: 'Libraries: the -L path, #pragma lib names, and loadlib pulling in only the members that define needed symbols.',
+      important: [{ at: 'def:loadlib', say: 'members loaded until no symbol is missing', weight: 2 }],
+    },
+    'pass.c': {
+      digest: '07f9a4e364b3',
+      summary: 'Resolving: branch targets patched to instructions, and the code reordered to follow its flow (follow).',
+      capitals: [{ at: 'def:patch', say: 'branches to their targets' }],
+      important: [
+        { at: 'def:follow', say: 'code laid out along its flow', weight: 2 },
+        { at: 'def:xfol', say: 'the walk: jumps to jumps removed', weight: 2 },
+        { at: 'def:brchain', say: 'a chain of branches followed', weight: 1 },
+      ],
+    },
+    'noop.c': {
+      digest: '678091632730',
+      summary: 'noops: prologues and epilogues made (frames, the link register saved), NOPs dropped, division as calls.',
+      capitals: [{ at: 'def:noops', say: 'frames built, pseudo-ops removed' }],
+      important: [
+        { at: 'def:initdiv', say: 'the division routines _div, _mod', weight: 1 },
+        { at: 'def:nocache', say: 'the pipeline: no cached branches', weight: 1 },
+      ],
+    },
+    'layout.c': {
+      digest: '37494160d2bd',
+      summary: 'Addresses: data laid out (dodata), text sized instruction by instruction (dotext), literal pools placed.',
+      capitals: [{ at: 'def:dotext', say: 'each instruction its address and size' }],
+      important: [
+        { at: 'def:dodata', say: 'data and bss addresses', weight: 2 },
+        { at: 'def:addpool', say: 'a large constant into a literal pool', weight: 2 },
+        { at: 'def:flushpool', say: 'the pool placed within reach', weight: 1 },
+        { at: 'def:xdefine', say: 'etext, edata, end defined', weight: 1 },
+      ],
+    },
+    'span.c': {
+      digest: '9819d07e89d5',
+      summary: "Instruction selection: each Prog's operands classified (aclass) and its Optab line found (oplook).",
+      capitals: [{ at: 'def:oplook', say: 'the form of an instruction' }],
+      important: [
+        { at: 'def:aclass', say: 'an operand\'s class: C_REG, C_LCON...', weight: 2 },
+        { at: 'def:immrot', say: 'an ARM immediate: 8 bits rotated', weight: 3 },
+        { at: 'def:buildop', say: 'the table sorted into ranges', weight: 1 },
+      ],
+    },
+    'optab.c': {
+      digest: 'e86aa3a7de6c',
+      summary: "The table of ARM instruction forms, read by oplook.",
+      important: [
+        { at: 'def:optab', say: 'opcode, operands, size, case', weight: 2 },
+        { at: 'comment:"a WORD may hold the address of an external symbol"', say: 'a lost row: every libc object needed it', weight: 2 },
+      ],
+    },
+    'asm.c': {
+      digest: '210c826a4948',
+      summary: 'asmb: the executable written, the text, the data, the symbols and line tables, and the header by -H type.',
+      capitals: [{ at: 'def:asmb', say: 'the a.out written' }],
+      important: [
+        { at: 'comment:"switch HEADTYPE (for header generation)"', say: 'Plan 9 a.out, ELF, raw...', weight: 2 },
+        { at: 'def:entryvalue', say: 'the entry point', weight: 1 },
+      ],
+    },
+    'codegen.c': {
+      digest: '5d17dcc4bf56',
+      summary: "asmout: a Prog encoded into ARM machine words, one case per Optab's encoding.",
+      capitals: [{ at: 'def:asmout', say: 'an instruction to machine code' }],
+      important: [
+        { at: 'def:oprrr', say: 'the data processing opcodes', weight: 2 },
+        { at: 'def:opbra', say: 'branches', weight: 1 },
+        { at: 'def:olr', say: 'loads and stores', weight: 1 },
+      ],
+    },
+    'datagen.c': {
+      digest: 'd4d88106c3c3',
+      summary: 'datblk: the data section written from the DATA instructions, bytes in the target\'s order.',
+      important: [
+        { at: 'def:datblk', say: 'a block of initialized data', weight: 2 },
+        { at: 'def:nuxiinit', say: 'the byte orders', weight: 1 },
+      ],
+    },
+    'debugging.c': {
+      digest: 'de3a83ec1d82',
+      summary: 'The symbol table and the pc-to-line table written for db and acid.',
+      important: [
+        { at: 'def:asmsym', say: 'symbols out', weight: 2 },
+        { at: 'def:asmlc', say: 'pc to line, compressed', weight: 2 },
+      ],
+    },
+    'dynamic.c': {
+      digest: '0ee9a1f4bcd4',
+      summary: 'Dynamically loaded modules (-x, -u): exported and imported symbols, relocations.',
+      important: [
+        { at: 'def:export', say: 'the export table', weight: 1 },
+        { at: 'def:dynreloc', say: 'a relocation recorded', weight: 1 },
+      ],
+    },
+    'profile.c': {
+      digest: '22802d461647',
+      summary: '-p: profiling calls inserted at each function\'s entry and exit.',
+      important: [{ at: 'def:doprof2', say: 'entry and exit calls', weight: 1 }],
+    },
+    'fmt.c': { digest: 'd5468f11eaae', summary: 'Printing Progs and operands, for -a and debugging.' },
+    'globals.c': {
+      digest: '3fdcad4525b9',
+      summary: "The linker's globals: the Prog lists (firstp, textp, datap), the symbol hash, the flags, the sizes.",
+      important: [
+        { at: 'def:firstp', say: 'all the code', weight: 2 },
+        { at: 'def:datap', say: 'all the data', weight: 2 },
+        { at: 'def:hash', say: 'the symbols', weight: 1 },
+      ],
+    },
+    'utils.c': { digest: 'f519b6350baa', summary: 'lookup (the symbol hash), prg (a new Prog), and number parsing.' },
+    'io.c': { digest: '854217d2d07a', summary: 'Output buffered: bytes, halfwords and words in either byte order.' },
+    'hist.c': { digest: 'f33c8c72cf11', summary: 'The source file history kept with the autos, for the line table.' },
+    'float.c': { digest: '4cd5b8f0eda4', summary: 'Floating constants: IEEE conversions, and which the ARM can encode.' },
+    'error.c': { digest: '35a60cba9741', summary: 'diag and errorexit: an error, and the output removed.' },
+  },
+  skeletons: [
+    skeletons.cmd('5l: load, resolve, generate (the book\'s)', 'main.c:def:main', [
+      ['obj.c:def:objfile', 'each file', 'loading'],
+      ['obj.c:def:ldobj', 'its instructions as Progs', 'an object'],
+      ['pass.c:def:patch', 'branches resolved', 'resolving'],
+      ['layout.c:def:dodata', 'data addresses', 'then'],
+      ['pass.c:def:follow', 'code in flow order', 'then'],
+      ['noop.c:def:noops', 'prologues, epilogues', 'then'],
+      ['layout.c:def:dotext', 'text addresses', 'then'],
+      ['asm.c:def:asmb', 'the a.out written', 'generating'],
+    ]),
+    skeletons.chain('asmb: the executable, from Progs to bytes', [
+      ['asm.c:def:asmb', 'the file', ''],
+      ['span.c:def:oplook', 'each instruction\'s form', 'the text'],
+      ['codegen.c:def:asmout', 'encoded', 'a Prog'],
+      ['datagen.c:def:datblk', 'the data', 'the data'],
+      ['debugging.c:def:asmsym', 'symbols', 'then'],
+    ]),
+    skeletons.parts("5l's files by phase", [
+      ['obj.c', 'loading'],
+      ['pass.c', 'resolving'],
+      ['layout.c', 'addresses'],
+      ['span.c', 'instruction forms'],
+      ['codegen.c', 'encoding'],
+      ['asm.c', 'the file'],
+      ['l.h', 'Prog, Sym'],
+    ], [
+      ['obj.c', 'pass.c', 'Progs'],
+      ['pass.c', 'layout.c', 'resolved'],
+      ['layout.c', 'span.c', 'sizes'],
+      ['asm.c', 'codegen.c', 'each instruction'],
+    ]),
+    M('main.c', 'The driver', [
+      ['def:main', 'the passes', ''],
+      ['def:undef', 'undefined symbols', 'at the end'],
+      ['def:usage', 'the flags', 'on error'],
+    ]),
+    M('obj.c', 'Loading objects', [
+      ['def:objfile', 'a file', ''],
+      ['def:ldobj', 'its instructions', 'decoded'],
+      ['def:inopd', 'operands', 'each'],
+      ['def:nopout', 'NOPs', 'some'],
+    ]),
+    M('lib.c', 'Libraries', [
+      ['def:addlibpath', 'the path', ''],
+      ['def:addlib', 'a library named', 'named'],
+      ['def:loadlib', 'its needed members', 'loaded'],
+    ]),
+    M('pass.c', 'Resolving and ordering', [
+      ['def:patch', 'branches', ''],
+      ['def:brchain', 'jump chains', 'shortened'],
+      ['def:follow', 'the flow', 'reordered'],
+      ['def:xfol', 'the walk', 'each'],
+    ]),
+    M('noop.c', 'Frames', [
+      ['def:noops', 'every function', ''],
+      ['def:initdiv', 'division routines', 'divisions'],
+      ['def:nocache', 'branches', 'pipeline'],
+    ]),
+    M('layout.c', 'Addresses', [
+      ['def:dodata', 'data', ''],
+      ['def:dotext', 'text', 'then'],
+      ['def:addpool', 'large constants', 'pooled'],
+      ['def:flushpool', 'pools placed', 'placed'],
+    ]),
+    M('span.c', 'Instruction forms', [
+      ['def:buildop', 'the table indexed', ''],
+      ['def:oplook', 'a Prog\'s form', 'looked up'],
+      ['def:aclass', 'operand classes', 'classified'],
+      ['def:immrot', 'ARM immediates', 'constants'],
+    ]),
+    M('optab.c', 'The table: an opcode, its operand classes, its encoding', [
+      ['def:optab', 'the forms, in opcode order', ''],
+      ['comment:"struct Optab:"', 'the columns: opcode, from, reg, to, case, size', 'read as'],
+      ['comment:"a WORD may hold the address of an external symbol"', 'a row once lost, restored', 'a lesson'],
+      ['code:"AADD,     C_REG,  C_REG,  C_REG"', 'a typical row: ADD R,R,R is case 1, 4 bytes', 'e.g.'],
+      ['code:"AXXX"', 'the end', 'ends'],
+    ]),
+    M('asm.c', 'The file written', [
+      ['def:asmb', 'text, data, symbols, header', ''],
+      ['def:entryvalue', 'the entry', 'header'],
+      ['comment:"switch HEADTYPE (for header generation)"', 'by format', 'header'],
+    ]),
+    M('codegen.c', 'Encoding', [
+      ['def:asmout', 'a Prog by case', ''],
+      ['def:oprrr', 'data processing', 'bits'],
+      ['def:opbra', 'branches', 'bits'],
+      ['def:olr', 'loads', 'bits'],
+      ['def:osr', 'stores', 'bits'],
+    ]),
+    M('datagen.c', 'Data', [
+      ['def:datblk', 'a block', ''],
+      ['def:nuxiinit', 'byte orders', 'set up'],
+      ['def:find1', 'a byte found', 'helper'],
+    ]),
+    M('debugging.c', 'Tables for debuggers', [
+      ['def:asmsym', 'symbols', ''],
+      ['def:putsymb', 'one symbol', 'each'],
+      ['def:asmlc', 'lines', 'then'],
+    ]),
+    M('dynamic.c', 'Dynamic modules', [
+      ['def:import', 'imports', ''],
+      ['def:export', 'exports', 'then'],
+      ['def:dynreloc', 'relocations', 'each'],
+      ['def:asmdyn', 'written', 'out'],
+    ]),
+    M('profile.c', 'Profiling', [
+      ['def:doprof1', 'counters', ''],
+      ['def:doprof2', 'calls', 'or'],
+    ]),
+    M('fmt.c', 'Printing', [
+      ['def:listinit', 'formats', ''],
+      ['def:Pconv', 'a Prog', '%P'],
+      ['def:Dconv', 'an operand', '%D'],
+    ]),
+    M('globals.c', 'The global state', [
+      ['def:firstp', 'code', ''],
+      ['def:datap', 'data', 'and'],
+      ['def:hash', 'symbols', 'named'],
+    ]),
+    M('utils.c', 'Helpers', [
+      ['def:lookup', 'a symbol', ''],
+      ['def:prg', 'a Prog', 'made'],
+      ['def:atolwhex', 'numbers', 'parsed'],
+    ]),
+  ],
+  views: [
+    { name: '5l and 8l', files: ['main.c', '../8l/obj.c', 'pass.c', '../8l/pass.c', 'span.c', '../8l/span.c', 'asm.c', '../8l/asm.c'] },
+  ],
+  tours: [
+    {
+      name: 'Linking a program',
+      stops: [
+        { at: 'main.c:def:main', say: 'Load, resolve, generate: the passes in order.' },
+        { at: 'obj.c:def:ldobj', say: 'The object format is the assembly almost as written: one Prog per instruction.' },
+        { at: 'pass.c:def:patch', say: 'Branches get their target instructions, not yet addresses.' },
+        { at: 'noop.c:def:noops', say: 'Here the frames are made: the compiler left it to the linker.' },
+        { at: 'layout.c:def:dotext', say: 'Each instruction sized and placed; large constants go to literal pools.' },
+        { at: 'span.c:def:oplook', say: 'Instruction selection happens in the linker: the form chosen from the table.' },
+        { at: 'codegen.c:def:asmout', say: 'Finally the machine words.' },
+        { at: 'asm.c:def:asmb', say: 'The a.out: header, text, data, symbols, line table.' },
+      ],
+    },
+  ],
+}

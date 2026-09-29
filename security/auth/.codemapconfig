@@ -1,0 +1,285 @@
+// security/auth/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). The design: ../docs/auth.ms ("Security in Plan 9", 2002): factotum
+// holds the keys, the auth server (authsrv over keyfs) issues tickets,
+// secstore keeps the key file.
+local skeletons = import '../../skeletons.libsonnet';
+local libauth = '../../lib_security/libauth/';
+local libauthsrv = '../../lib_security/libauthsrv/';
+local libsec = '../../lib_security/libsec/port/';
+
+// a key converter: rsa2any.c's getkey (the key from factotum's format),
+// then the conversion
+local conv(file, name, what, via, via_role) =
+  skeletons.cmd(name, file + ':def:main', [
+    ['rsa2any.c:' + via, via_role, 'argv'],
+  ] + (if what == null then [] else [[what[0], what[1], 'the key']]));
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The authentication programs: the auth server and its key database, login, and tools for keys and accounts.',
+  files: {
+    'authsrv.c': {
+      summary: 'The auth server: answers ticket requests (p9sk1), challenges (APOP, CHAP...) and password changes, run per call.',
+      digest: '7f1d59045e55',
+      capitals: [
+        { at: 'def:main', say: 'a request read, dispatched by its type' },
+        { at: 'code:"ticketrequest(Ticketreq *tr)"', say: 'the tickets: one per side, sealed' },
+      ],
+      important: [
+        { at: 'code:"switch(buf[0])"', say: 'AuthTreq, AuthChal, AuthPass, AuthApop...', weight: 2 },
+        { at: 'code:"if(speaksfor(tr->hostid, tr->uid))"', say: 'may this host speak for this user?', weight: 3 },
+        { at: 'code:"convT2M(&t, tbuf+1, hkey)"', say: "the host's ticket, in the host's key", weight: 2 },
+        { at: 'code:"speaksfor(char *speaker, char *user)"', say: 'the hostid statements in /lib/ndb/auth', weight: 1 },
+        { at: 'code:"challengebox(Ticketreq *tr)"', say: 'a SecureNet box or SecurID: a challenge', weight: 1 },
+        { at: 'code:"changepasswd(Ticketreq *tr)"', say: 'passwd: the new key sealed in the old', weight: 1 },
+        { at: 'code:"mkkey(char *k)"', say: "a random key: an unknown user's too", weight: 1 },
+      ],
+      related: ['factotum/p9sk1.c', 'keyfs.c', '../docs/auth.ms'],
+    },
+    'keyfs.c': {
+      summary: 'keyfs: the key file /adm/keys, decrypted with the machine key and served as a tree /mnt/keys/user/key.',
+      digest: '353885a3b718',
+      capitals: [
+        { at: 'def:main', say: "the auth server's database, as files" },
+      ],
+      important: [
+        { at: 'code:"(*fcalls[])(Fid*)"', say: 'the 9P messages to handlers, a table', weight: 2 },
+        { at: 'code:"readusers(void)"', say: 'the file decrypted, users loaded', weight: 2 },
+        { at: 'code:"writeusers(void)"', say: 'every change written back, encrypted', weight: 2 },
+        { at: 'code:"io(int in, int out)"', say: 'the loop: a message, its handler', weight: 2 },
+        { at: 'code:"Read(Fid *f)"', say: 'reading key, secret, expire, status', weight: 1 },
+      ],
+    },
+    'authcmdlib.h': {
+      summary: "What the key commands share: the key databases' paths, an account's bio, lib/'s functions.",
+      digest: '004a924e6494',
+      important: [
+        { at: 'def:KEYDB', say: 'where keyfs is mounted', weight: 1 },
+        { at: 'type:Acctbio', say: "an account's description", weight: 1 },
+      ],
+    },
+    'login.c': {
+      summary: 'login: a user verified by the auth server, a factotum started for them, a new namespace, a shell.',
+      digest: 'ef683e84f9d7',
+      important: [
+        { at: 'def:startfactotum', say: "the user's own factotum, their password given", weight: 2 },
+        { at: 'def:chuid', say: 'the capability used: become the user', weight: 2 },
+      ],
+    },
+    'cron.c': {
+      summary: 'cron: each user\'s jobs run at their times, as the user (a capability), maybe on another host.',
+      digest: 'b0a5f3bae379',
+      important: [
+        { at: 'type:Job', say: 'a line of a cron file: times and command', weight: 1 },
+        { at: 'code:"readalljobs(void)"', say: 'every /cron/user/cron read', weight: 1 },
+        { at: 'code:"rexec(User *user, Job *j)"', say: 'run: dial the host, as the user', weight: 2 },
+        { at: 'code:"becomeuser(char *new)"', say: 'the hostowner becomes the user', weight: 1 },
+      ],
+    },
+    'as.c': {
+      summary: 'as: a command run as another user, the host owner making the capability.',
+      digest: '2927457ff54d',
+      important: [
+        { at: 'code:"mkcap(char *from, char *to)"', say: 'a capability, hashed into #¤/caphash', weight: 2 },
+        { at: 'code:"usecap(char *cap)"', say: 'written to #¤/capuse: now the user', weight: 2 },
+      ],
+    },
+    'guard.srv.c': {
+      summary: 'guard.srv: a SecureNet box or SecurID challenge answered over the network (for telnet logins).',
+      digest: '91387307507e',
+    },
+    'debug.c': {
+      summary: 'auth/debug: checks the auth setup, keys and the auth server, and says what is wrong.',
+      digest: '2c36533e1441',
+      important: [
+        { at: 'code:"authfutz(char *dom, char *user)"', say: 'a ticket asked for and checked by hand', weight: 2 },
+      ],
+    },
+    'warning.c': {
+      summary: 'auth/warning: mail to users whose accounts expire soon.',
+      digest: '88dc056bd37c',
+    },
+    'secureidcheck.c': {
+      summary: 'A SecurID token code checked by RADIUS (RFC 2138) over UDP, the timeouts a known weakness.',
+      digest: '8d312b9c4129',
+      capitals: [
+        { at: 'code:"secureidcheck(char *user, char *response)"', say: 'is this token code right?' },
+      ],
+      important: [
+        { at: 'comment:"This whole approach is flawed"', say: 'the authors\' own verdict on RADIUS', weight: 2 },
+        { at: 'code:"rpc(char *dest, Secret *shared, Packet *req)"', say: 'a UDP request, retried', weight: 2 },
+        { at: 'code:"hide(Secret *shared"', say: "the password hidden, RADIUS's way", weight: 1 },
+      ],
+    },
+    'rsa2any.c': {
+      summary: "What the key converters share: an RSA or DSA key read in factotum's format, SSH's encodings.",
+      digest: 'e5b1186904e0',
+      important: [
+        { at: 'def:getkey', say: 'an RSA key from its attributes', weight: 2 },
+        { at: 'def:getdsakey', say: 'a DSA key likewise', weight: 1 },
+      ],
+    },
+    'rsa2any.h': { summary: "rsa2any.c's functions, for the converters.", digest: 'f14d8a425bac' },
+    'changeuser.c': { summary: 'changeuser: an account made or changed in keyfs: key, secret, bio, expiry.', digest: '26efa58f7009' },
+    'passwd.c': { summary: "passwd: the user's password changed, through the auth server.", digest: 'bf19cc7d374f' },
+    'netkey.c': { summary: 'netkey: a SecureNet box computed in software, a challenge answered.', digest: 'b95d17a5b37a' },
+    'printnetkey.c': { summary: "printnetkey: a user's SecureNet key printed.", digest: '89b7f704d2d0' },
+    'convkeys.c': { summary: 'convkeys: the key file re-encrypted under a new machine key.', digest: 'bc3328fd1b25' },
+    'convkeys2.c': { summary: 'convkeys2: the key file converted from the old format.', digest: 'eebe4e2d996f' },
+    'convbio.c': { summary: 'convbio: the accounts file converted from the old format.', digest: '9dce1a28cc49' },
+    'uniq.c': { summary: 'auth/uniq: lines with the same user kept once, sorted.', digest: '61985be3d2e1' },
+    'newns.c': { summary: 'newns: a command run in the namespace built from /lib/namespace.', digest: '13fd23515ec2' },
+    'none.c': { summary: 'none: a command run as the user none, in a fresh namespace.', digest: '667df932c785' },
+    'readnvram.c': { summary: "readnvram: the machine's key, owner and domain printed from nvram.", digest: 'e8c4dec9fa02' },
+    'wrkey.c': { summary: "wrkey: the host owner's key, domain and password written to nvram.", digest: 'b4deb469903c' },
+    'challenge.c': { summary: 'auth/challenge: the server side of a challenge/response, through factotum.', digest: '8b6743e70371' },
+    'respond.c': { summary: 'auth/respond: a challenge answered by factotum.', digest: '123c3aee324c' },
+    'userpasswd.c': { summary: 'auth/userpasswd: a user and password fetched from factotum (proto=pass).', digest: '33c23723dbd3' },
+    'asn12dsa.c': { summary: 'asn12dsa: a DSA key in ASN.1 DER to factotum\'s format.', digest: 'e8210145b45c' },
+    'asn12rsa.c': { summary: 'asn12rsa: an RSA key in ASN.1 DER to factotum\'s format.', digest: '31ba454e0b9f' },
+    'dsa2pub.c': { summary: 'dsa2pub: a DSA key\'s public half.', digest: 'c0c221c9e546' },
+    'dsa2ssh.c': { summary: 'dsa2ssh: a DSA public key in SSH\'s format.', digest: '3a1602e4eb9e' },
+    'dsagen.c': { summary: 'dsagen: a new DSA key.', digest: '2c5c32a34326' },
+    'pemdecode.c': { summary: 'pemdecode: a PEM section decoded to binary.', digest: '24c584d2d151' },
+    'pemencode.c': { summary: 'pemencode: binary encoded as a PEM section.', digest: '4e2cd7558b7f' },
+    'rsa2csr.c': { summary: 'rsa2csr: an X.509 certificate request for an RSA key.', digest: '9b3083046d42' },
+    'rsa2pub.c': { summary: 'rsa2pub: an RSA key\'s public half.', digest: 'cf7fedf7c5b7' },
+    'rsa2ssh.c': { summary: 'rsa2ssh: an RSA public key in SSH\'s format.', digest: '0efd47623eb9' },
+    'rsa2x509.c': { summary: 'rsa2x509: a self-signed X.509 certificate for an RSA key.', digest: '621321c4868f' },
+    'rsafill.c': { summary: 'rsafill: an RSA key\'s missing CRT fields computed.', digest: '1d15691de965' },
+    'rsagen.c': { summary: 'rsagen: a new RSA key, in factotum\'s format.', digest: 'fa2648563995' },
+  },
+  skeletons: [
+    skeletons.parts('Plan 9 security: the agent, the server, the safe', [
+      ['factotum/', "factotum: the user's keys, every protocol"],
+      ['authsrv.c', 'the auth server: tickets and challenges'],
+      ['keyfs.c', "the auth server's keys, as files"],
+      ['secstore/', 'the safe for factotum\'s key file'],
+      ['login.c', 'a login: a user proved, a factotum started'],
+      ['lib/', "the key commands' shared code"],
+      ['../../lib_security/libauth/', 'what programs call: auth_proxy'],
+    ], [
+      ['../../lib_security/libauth/', 'factotum/', '/mnt/factotum/rpc'],
+      ['factotum/', 'authsrv.c', 'ticket requests'],
+      ['authsrv.c', 'keyfs.c', '/mnt/keys/user/key'],
+      ['factotum/', 'secstore/', 'the keys at boot'],
+      ['login.c', 'factotum/', 'started for the user'],
+      ['authsrv.c', 'lib/', 'findkey, readn'],
+    ]),
+    skeletons.cmd('authsrv: a ticket request answered', 'authsrv.c:def:main', [
+      ['authsrv.c:code:"ticketrequest(Ticketreq *tr)"', 'AuthTreq: two tickets made', 'a Ticketreq'],
+      ['lib/readwrite.c:def:findkey', "each side's key, from keyfs", 'the ids'],
+      ['authsrv.c:code:"speaksfor(char *speaker, char *user)"', 'the host may speak for the user', 'hostid, uid'],
+      [libauthsrv + 'convT2M.c:def:convT2M', 'a ticket sealed in a key (DES)', 'the keys'],
+    ], main_role='main: per call (listen), a ticket request read and dispatched'),
+    skeletons.cmd('keyfs: the keys as a file server', 'keyfs.c:def:main', [
+      ['lib/getauthkey.c:def:getauthkey', 'the machine key, from nvram', 'first'],
+      ['keyfs.c:code:"readusers(void)"', '/adm/keys decrypted, users loaded', 'the key'],
+      ['keyfs.c:code:"io(int in, int out)"', '9P messages, handlers by the fcalls table', 'mounted on /mnt/keys'],
+      ['keyfs.c:code:"writeusers(void)"', 'a change: the file rewritten', 'a Write'],
+    ]),
+    skeletons.cmd('login: a user becomes themselves', 'login.c:def:main', [
+      [libauth + 'auth_userpasswd.c:def:auth_userpasswd', 'the password checked by the auth server', 'user, password'],
+      ['login.c:def:chuid', 'the capability: this process is the user', 'an AuthInfo'],
+      ['login.c:def:startfactotum', "the user's factotum, keyed", 'the password'],
+      [libauth + 'newns.c:def:newns', 'the namespace, then rc', 'the user'],
+    ]),
+    skeletons.cmd('cron: jobs at their times', 'cron.c:def:main', [
+      ['cron.c:code:"readalljobs(void)"', "every user's cron file", 'each minute'],
+      ['cron.c:code:"rexec(User *user, Job *j)"', 'a job due: run as the user', 'a Job'],
+      ['cron.c:code:"becomeuser(char *new)"', 'the capability used', 'the user'],
+    ]),
+    skeletons.cmd('as: a command as someone else', 'as.c:def:main', [
+      ['as.c:code:"runas(char *user, char *cmd)"', 'become the user, exec rc', 'user, cmd'],
+      ['as.c:code:"becomeuser(char *new)"', 'mkcap, then usecap', 'the user'],
+    ]),
+    skeletons.cmd('guard.srv: a challenge answered', 'guard.srv.c:def:main', [
+      ['lib/netcheck.c:def:netcheck', 'a SecureNet response checked', 'the key'],
+      ['secureidcheck.c:code:"secureidcheck(char *user, char *response)"', 'or a SecurID code', 'no key'],
+    ]),
+    skeletons.cmd('auth/debug: what is wrong', 'debug.c:def:main', [
+      ['debug.c:def:debugfactotumkeys', "factotum's p9sk1 keys, each tried", 'the keys'],
+      ['debug.c:code:"authdialfutz(char *dom, char *user)"', 'the auth server dialed', 'a domain'],
+      ['debug.c:code:"authfutz(char *dom, char *user)"', 'a ticket fetched and checked by hand', 'a connection'],
+    ]),
+    skeletons.cmd('auth/warning: expiry mail', 'warning.c:def:main', [
+      ['warning.c:def:dodir', 'every account of a key database', 'keyfs'],
+      ['warning.c:def:mail', 'a warning mailed', 'expiring'],
+    ]),
+    skeletons.cmd('changeuser: an account', 'changeuser.c:def:main', [
+      [libauthsrv + 'passtokey.c:def:passtokey', 'the password to a DES key', 'typed'],
+      ['changeuser.c:code:"install(char *db, char *u, char *key, long t, int newkey)"', "written to keyfs's files", 'the key'],
+      ['lib/querybio.c:def:querybio', 'the bio asked for', 'then'],
+    ]),
+    skeletons.cmd('passwd: a new password', 'passwd.c:def:main', [
+      [libauthsrv + 'authdial.c:def:authdial', 'the auth server', 'first'],
+      ['passwd.c:def:asrdresp', 'its answer read', 'AuthPass'],
+    ]),
+    {
+      name: 'secureidcheck.c: a RADIUS exchange',
+      bones: [
+        { at: 'secureidcheck.c:code:"secureidcheck(char *user, char *response)"', role: 'the entry: user and token code' },
+        { at: 'secureidcheck.c:code:"newRequest(uchar *auth)"', role: 'an Access-Request packet' },
+        { at: 'secureidcheck.c:code:"hide(Secret *shared"', role: 'the password hidden with the shared secret' },
+        { at: 'secureidcheck.c:code:"rpc(char *dest, Secret *shared, Packet *req)"', role: 'sent over UDP, the reply checked' },
+      ],
+      joints: [
+        { from: 'secureidcheck.c:code:"secureidcheck(char *user, char *response)"', to: 'secureidcheck.c:code:"newRequest(uchar *auth)"', say: 'a request' },
+        { from: 'secureidcheck.c:code:"newRequest(uchar *auth)"', to: 'secureidcheck.c:code:"hide(Secret *shared"', say: 'the password' },
+        { from: 'secureidcheck.c:code:"hide(Secret *shared"', to: 'secureidcheck.c:code:"rpc(char *dest, Secret *shared, Packet *req)"', say: 'the packet' },
+      ],
+    },
+    {
+      name: 'rsa2any.c: keys read, SSH written',
+      bones: [
+        { at: 'rsa2any.c:def:getkey', role: "an RSA key from factotum's attributes" },
+        { at: 'rsa2any.c:def:getdsakey', role: 'a DSA key likewise' },
+        { at: 'rsa2any.c:def:putmp2', role: 'SSH: a big number, length first' },
+        { at: 'rsa2any.c:def:put4', role: 'SSH: a 32-bit length' },
+      ],
+      joints: [
+        { from: 'rsa2any.c:def:putmp2', to: 'rsa2any.c:def:put4', say: 'the length' },
+      ],
+    },
+    conv('rsa2pub.c', 'rsa2pub', null, 'def:getkey', 'the key read'),
+    conv('rsa2ssh.c', 'rsa2ssh', null, 'def:getkey', 'the key read'),
+    conv('rsa2csr.c', 'rsa2csr', null, 'def:getkey', 'the private key read'),
+    conv('rsa2x509.c', 'rsa2x509', null, 'def:getkey', 'the private key read'),
+    conv('rsafill.c', 'rsafill', null, 'def:getkey', 'the key read'),
+    conv('dsa2pub.c', 'dsa2pub', null, 'def:getdsakey', 'the key read'),
+    conv('dsa2ssh.c', 'dsa2ssh', null, 'def:getdsakey', 'the key read') + {
+      bones+: [{ at: 'rsa2any.c:def:putmp2', role: 'each number, SSH-encoded' }],
+      joints+: [{ from: 'rsa2any.c:def:getdsakey', to: 'rsa2any.c:def:putmp2', say: 'p, q, alpha, key' }],
+    },
+    skeletons.cmd('asn12rsa', 'asn12rsa.c:def:main', [[libsec + 'x509.c:def:asn1toRSApriv', 'DER decoded', 'the bytes']]),
+    skeletons.cmd('asn12dsa', 'asn12dsa.c:def:main', [[libsec + 'x509.c:def:asn1toDSApriv', 'DER decoded', 'the bytes']]),
+    skeletons.cmd('rsagen', 'rsagen.c:def:main', [[libsec + 'rsagen.c:def:rsagen', 'a new key', '-b bits']]),
+    skeletons.cmd('dsagen', 'dsagen.c:def:main', [[libsec + 'dsagen.c:def:dsagen', 'a new key', '']]),
+    skeletons.cmd('pemdecode', 'pemdecode.c:def:main', [[libsec + 'decodepem.c:def:decodePEM', 'the section decoded', 'the text']]),
+    skeletons.cmd('pemencode', 'pemencode.c:def:main', [['../../lib_core/libc/port/u64.c:def:enc64', 'base 64', 'the bytes']]),
+    skeletons.cmd('netkey', 'netkey.c:def:main', [
+      [libauthsrv + 'passtokey.c:def:passtokey', 'the password to a key', 'typed'],
+      ['../../lib_core/libc/port/netcrypt.c:def:netcrypt', 'the challenge encrypted', 'a challenge'],
+    ]),
+    skeletons.cmd('printnetkey', 'printnetkey.c:def:main', [['lib/readwrite.c:def:findkey', 'the key from netkeys', 'the user']]),
+    skeletons.cmd('convkeys', 'convkeys.c:def:main', [
+      ['lib/getauthkey.c:def:getauthkey', 'the old machine key', 'first'],
+      ['convkeys.c:code:"convert(char *p, char *key, int len)"', 'each entry re-encrypted', 'the file'],
+    ]),
+    skeletons.cmd('convkeys2', 'convkeys2.c:def:main', [
+      ['convkeys2.c:code:"convert(char *p, char *np, char *key, int len)"', 'old entries to new', 'the file'],
+    ]),
+    skeletons.cmd('convbio', 'convbio.c:def:main', [
+      ['convbio.c:def:ordbio', 'an old entry read', 'a line'],
+      ['convbio.c:def:nwrbio', 'written anew', 'an Acctbio'],
+    ]),
+    skeletons.cmd('uniq', 'uniq.c:def:main', [['uniq.c:def:cmp', 'lines sorted by user', 'qsort']]),
+    skeletons.cmd('newns', 'newns.c:def:main', [[libauth + 'newns.c:def:newns', 'the namespace built', 'the user'], [libauth + 'newns.c:def:addns', 'or added to (-a)', '']]),
+    skeletons.cmd('none', 'none.c:def:main', [[libauth + 'newns.c:def:newns', "none's namespace", 'as none']]),
+    skeletons.cmd('readnvram', 'readnvram.c:def:main', [[libauthsrv + 'readnvram.c:def:readnvram', 'nvram read', '']]),
+    skeletons.cmd('wrkey', 'wrkey.c:def:main', [[libauthsrv + 'readnvram.c:def:readnvram', 'asks, then writes nvram (NVwrite)', '']]),
+    skeletons.cmd('challenge', 'challenge.c:def:main', [[libauth + 'auth_rpc.c:def:auth_rpc', "factotum's rpc: start, read, write", 'params']]),
+    skeletons.cmd('respond', 'respond.c:def:main', [[libauth + 'auth_respond.c:def:auth_respond', 'factotum answers', 'chal']]),
+    skeletons.cmd('userpasswd', 'userpasswd.c:def:main', [[libauth + 'auth_getuserpasswd.c:def:auth_getuserpasswd', 'proto=pass asked', 'fmt']]),
+  ],
+}

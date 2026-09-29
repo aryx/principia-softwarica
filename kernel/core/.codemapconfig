@@ -1,0 +1,125 @@
+// kernel/core/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel.nw, chapter Core Data Structures (and Error
+// Management); "Portable versus arch-specific code" for the port/arch split.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "What every kernel file is written with: the error strings, Conf and Cpu, the types' forward names, and dat.h/fns.h per arch.",
+  files: {
+    'error.c': {
+      digest: 'f8bce8e1e8f0',
+      summary: "The kernel's errors are strings: one global per message, raised by error() and returned to user as errstr.",
+      capitals: [
+        { at: 'def:Enonexist', say: 'errors are strings: error(Enonexist)' },
+      ],
+      important: [
+        { at: 'def:Eperm', say: 'the permission denied', weight: 2 },
+        { at: 'def:Ebadarg', say: "a system call's bad argument", weight: 2 },
+        { at: 'def:Eintr', say: 'a sleep interrupted by a note', weight: 1 },
+        { at: 'def:Enovmem', say: 'out of virtual memory', weight: 1 },
+      ],
+      related: ['error.h', '../processes/proc.c'],
+    },
+    'error.h': {
+      digest: '356b951a16cd',
+      summary: 'The error strings declared, for the 114 files that raise them.',
+      capitals: [
+        { at: 'def:Enonexist', say: 'the errors, declared for every file' },
+      ],
+      related: ['error.c'],
+    },
+    'portdat_core.h': {
+      digest: '9c2e3b0d9df2',
+      summary: 'The portable core structures: Conf (the machine found at boot), Cpu (a processor, its current process), Label.',
+      capitals: [
+        { at: 'type:Cpu', say: 'a processor: its process, ticks, scheduler label' },
+        { at: 'type:Conf', say: 'the machine: memory banks, processes, pages' },
+      ],
+      important: [
+        { at: 'type:Confmem', say: 'a bank of physical memory', weight: 2 },
+        { at: 'type:Label', say: 'a saved sp and pc: setjmp for the kernel', weight: 3 },
+        { at: 'comment:"coupling: do not change the order of the first 4 fields"', say: 'assembly reads Cpu by offset', weight: 2 },
+        { at: 'def:CPUS', say: 'each processor, for loops', weight: 1 },
+        { at: 'def:cpuserver', say: 'a terminal or a CPU server: set by the config', weight: 1 },
+      ],
+    },
+    'portdat_forward.h': {
+      digest: 'aa8e32933065',
+      summary: 'Every kernel structure named once (typedef struct X X), so the headers can point at each other.',
+      important: [
+        { at: 'type:Chan', say: 'the open file: the most used structure', weight: 3 },
+        { at: 'type:Segment', say: "a piece of a process's address space", weight: 2 },
+        { at: 'type:Rendez', say: 'where a process sleeps', weight: 2 },
+        { at: 'type:QLock', say: 'the sleeping lock', weight: 1 },
+        { at: 'type:Queue', say: 'the byte queue under pipes and devices', weight: 1 },
+      ],
+    },
+    'portdat.c': {
+      digest: '063d3edcd2ee',
+      summary: 'The core globals: conf, the boot parameters (confname, confval), cpus[], eve (the host owner) and iseve().',
+      important: [
+        { at: 'def:conf', say: 'filled by arch__confinit at boot', weight: 2 },
+        { at: 'def:cpus', say: "each processor's Cpu, for the others to see", weight: 2 },
+        { at: 'def:iseve', say: 'the only privilege check: am I the host owner?', weight: 3 },
+      ],
+    },
+    'portfns.c': {
+      digest: '798900415034',
+      summary: "Function pointers (print, error, sleep, wakeup...) that main() fills: they break the files' circular dependencies.",
+      capitals: [
+        { at: 'comment:"backward dependencies breaker"', say: 'print, error, sleep...: pointers main() sets' },
+      ],
+      important: [
+        { at: 'def:error', say: 'set to proc_error: a longjmp to waserror', weight: 3 },
+        { at: 'def:sleep', say: 'set to proc_sleep', weight: 2 },
+        { at: 'def:print', say: 'set to devcons_print', weight: 2 },
+        { at: 'def:readnum', say: 'a number as a device file reads it', weight: 1 },
+        { at: 'def:readstr', say: 'a string as a device file reads it', weight: 1 },
+      ],
+      related: ['../init/arm/main.c'],
+    },
+    'portfns_core.h': {
+      digest: 'c11b9bf2cb64',
+      summary: 'The core functions declared (as pointers, see portfns.c) and the rounding macros (ROUND, PGROUND).',
+      important: [
+        { at: 'def:PGROUND', say: 'an address rounded up to a page', weight: 2 },
+        { at: 'def:error', say: 'a pointer, not a function', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('The core: what dat.h and fns.h gather', [
+      ['arm/', 'dat.h and fns.h: every file includes them'],
+      ['portdat_forward.h', 'every structure named'],
+      ['portdat_core.h', 'Conf, Cpu, Label'],
+      ['portdat.c', 'the globals: conf, cpus, eve'],
+      ['portfns_core.h', 'the core functions declared'],
+      ['portfns.c', 'their pointers, filled by main'],
+      ['error.c', 'the error strings'],
+      ['386/', 'the same for the PC'],
+    ], [
+      ['arm/', 'portdat_forward.h', 'includes'],
+      ['arm/', 'portdat_core.h', 'includes'],
+      ['arm/', 'portfns_core.h', 'includes'],
+      ['386/', 'portdat_core.h', 'includes'],
+      ['portfns_core.h', 'portfns.c', 'declares'],
+      ['portdat_core.h', 'portdat.c', 'declares'],
+    ]),
+    {
+      name: 'Breaking the cycles: pointers filled by main (portfns.c)',
+      bones: [
+        { at: 'portfns_core.h:def:error', role: 'declared as a pointer' },
+        { at: 'portfns.c:comment:"backward dependencies breaker"', role: 'the pointers, nil' },
+        { at: 'portfns.c:def:error', role: 'one of them' },
+        { at: '../init/arm/main.c:def:main', role: 'fills them first thing' },
+        { at: '../processes/proc.c:def:proc_error', role: 'what error() really is' },
+      ],
+      joints: [
+        { from: 'portfns_core.h:def:error', to: 'portfns.c:def:error', say: 'defined' },
+        { from: '../init/arm/main.c:def:main', to: 'portfns.c:def:error', say: 'error = proc_error' },
+        { from: 'portfns.c:def:error', to: '../processes/proc.c:def:proc_error', say: 'called through' },
+      ],
+    },
+  ],
+}

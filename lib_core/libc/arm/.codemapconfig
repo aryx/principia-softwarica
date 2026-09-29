@@ -1,0 +1,140 @@
+// lib_core/libc/arm/: what the code map says of it (tinybox codemap; its
+// manual: ~/github/ocaml-elm-playground/docs/manual/codemap.md). The
+// book: Libcore.nw's "Crash course: Plan 9 ARM assembly", "_main()
+// (ARM)", "memset() (ARM)", "memmove() (ARM)" (Libcore_arm.nw is empty).
+// The assembly's TEXT symbols are not definitions to the map: anchors
+// here are code: lines or a file's local labels.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libc's ARM half: _main, where every program starts; setjmp, tas and cas; fast memmove, memset and string routines; the 64-bit and division runtime the compiler calls.",
+  files: {
+    'main9.s': {
+      summary: '_main, the entry of every program (the a.out\'s start): R12 set for SB, _tos saved, argc and argv passed to main, then exits("main").',
+      digest: '654819362590',
+      capitals: [{ at: 'code:"TEXT    _main"', say: 'where every program starts' }],
+      important: [
+        { at: 'code:"setR12"', say: 'R12 the static base: globals reachable', weight: 3 },
+        { at: 'code:"_tos"', say: 'the kernel passes the top-of-stack struct in R0', weight: 2 },
+        { at: 'code:"_privates"', say: 'per-process private words on the stack', weight: 1 },
+        { at: 'code:"BL      main"', say: "the program's main", weight: 3 },
+        { at: 'code:"BL      exits"', say: 'main returned: exits("main")', weight: 2 },
+      ],
+    },
+    'main9p.s': {
+      summary: '_mainp, _main for profiled programs: _profmain called first, then main.',
+      digest: '7f8c0dd5f1b6',
+      important: [{ at: 'code:"_profmain"', say: 'the only difference with _main', weight: 2 }],
+    },
+    'argv0.s': {
+      summary: 'The globals _main fills: _tos, _privates, _nprivates, and argv0 (the program\'s name, for ARGBEGIN).',
+      digest: '8f73f75865d9',
+    },
+    'setjmp.s': {
+      summary: 'setjmp and longjmp: only SP and the link register saved (the callee saves nothing in Plan 9 C); how libthread switches threads.',
+      digest: '85810f448f25',
+      important: [
+        { at: 'code:"TEXT setjmp"', say: 'two words: SP and LR', weight: 3 },
+        { at: 'code:"TEXT longjmp"', say: 'back to the setjmp, returning r (never 0)', weight: 2 },
+      ],
+    },
+    'notejmp.c': {
+      summary: 'notejmp: a note handler leaves by a longjmp, by rewriting the saved registers (Ureg) and returning with noted(NCONT).',
+      digest: '43ab89b93c40',
+    },
+    'tas.s': {
+      summary: '_tas, test-and-set by SWP: the atomic primitive under lock().',
+      digest: '28f264ac8c49',
+      important: [{ at: 'code:"SWPW"', say: 'atomic swap (deprecated in ARMv7)', weight: 2 }],
+    },
+    'atom.s': {
+      summary: 'cas, ainc, adec: compare-and-swap and atomic counters by LDREX/STREX (ARMv6 and later).',
+      digest: '515a5bd8c2e2',
+      important: [{ at: 'def:spincas', say: 'retry until the store-exclusive succeeds', weight: 2 }],
+    },
+    'getcallerpc.s': { summary: "getcallerpc: the caller's return address (malloc tags, qunlock's warning).", digest: '7e603910c5ae' },
+    'getfcr.s': { summary: 'The floating-point control registers, as no-ops (software floating point).', digest: '8f52491850db' },
+    'getfcr.vfp.S': { summary: "The floating-point control registers for VFP, by VMRS/VMSR.", digest: '00661615df1f' },
+    'cycles.c': { summary: 'cycles: no cycle counter read on ARM; always 0.', digest: '06ff4003af06' },
+    'memmove.s': {
+      summary: 'memmove and memcpy: forward or backward by overlap, then by 32 bytes (MOVM), 4, then 1; unaligned sources by shifts.',
+      digest: 'b6caa4b025ae',
+      important: [
+        { at: 'def:_memmove', say: 'overlap decides the direction', weight: 3 },
+        { at: 'def:_f32loop', say: 'eight registers at a time: MOVM', weight: 2 },
+        { at: 'def:_funaligned', say: 'source unaligned: words shifted together', weight: 2 },
+      ],
+    },
+    'memset.s': {
+      summary: 'memset: the byte replicated in a word, then 16 bytes at a time.',
+      digest: 'c430130ff6e4',
+      important: [{ at: 'def:_f16loop', say: 'four registers stored at a time', weight: 2 }],
+    },
+    'strchr.s': { summary: 'strchr in assembly, a word at a time once aligned.', digest: '8f45b60c352c' },
+    'strcmp.s': { summary: 'strcmp in assembly, a word at a time when both are aligned.', digest: '14cd21a5417e' },
+    'strcpy.s': { summary: 'strcpy in assembly, aligned words when it can.', digest: 'aad4991d9678' },
+    'div.s': {
+      summary: '_div, _mod, _divu, _modu: ARM has no divide instruction, so the compiler calls these.',
+      digest: 'bf5af39f3add',
+      important: [{ at: 'comment:"divide by zero fault"', say: 'division by zero: a fault on purpose', weight: 1 }],
+    },
+    'vlop.s': { summary: '_mulv: a 64-bit multiply by MULLU, for vlrt.', digest: 'c408818a6703' },
+    'vlrt.c': {
+      summary: 'The vlong runtime: the compiler turns 64-bit arithmetic into calls here (_addv, _divv, _d2v...), a Vlong as two words.',
+      digest: 'f0fc4ec345f7',
+      important: [
+        { at: 'type:Vlong', say: 'a 64-bit number: lo, hi', weight: 3 },
+        { at: 'def:dodiv', say: 'long division, bit by bit', weight: 2 },
+        { at: 'def:_d2v', say: 'double to vlong, from the bits', weight: 1 },
+        { at: 'def:_vasop', say: 'x op= y, for any integer type of x', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('libc on ARM: the start, the atoms, the fast paths, the runtime', [
+      ['main9.s', 'every program starts here'],
+      ['argv0.s', 'the globals it fills'],
+      ['setjmp.s', 'saved and resumed: errors, threads'],
+      ['tas.s', 'the atomic swap under lock'],
+      ['memmove.s', 'memory copied fast'],
+      ['vlrt.c', "64-bit arithmetic the compiler can't inline"],
+      ['div.s', 'division, in software'],
+    ], [
+      ['main9.s', 'argv0.s', 'fills'],
+      ['vlrt.c', 'div.s', '32-bit divisions'],
+    ]),
+    {
+      name: 'memmove.s: copying fast',
+      bones: [
+        { at: 'memmove.s:def:_memmove', role: 'overlap? which way' },
+        { at: 'memmove.s:def:_forward', role: 'from the start' },
+        { at: 'memmove.s:def:_f32loop', role: '32 bytes a turn' },
+        { at: 'memmove.s:def:_funaligned', role: 'unaligned source' },
+        { at: 'memmove.s:def:_back', role: 'from the end' },
+        { at: 'memmove.s:def:_return', role: 'done' },
+      ],
+      joints: [
+        { from: 'memmove.s:def:_memmove', to: 'memmove.s:def:_forward', say: 'to below from' },
+        { from: 'memmove.s:def:_memmove', to: 'memmove.s:def:_back', say: 'overlapping' },
+        { from: 'memmove.s:def:_forward', to: 'memmove.s:def:_f32loop', say: 'aligned' },
+        { from: 'memmove.s:def:_forward', to: 'memmove.s:def:_funaligned', say: 'not' },
+        { from: 'memmove.s:def:_f32loop', to: 'memmove.s:def:_return', say: 'the tail' },
+      ],
+    },
+    {
+      name: 'vlrt.c: 64 bits in two words',
+      bones: [
+        { at: 'vlrt.c:type:Vlong', role: 'lo and hi' },
+        { at: 'vlrt.c:def:_divv', role: 'signed division' },
+        { at: 'vlrt.c:def:dodiv', role: 'the division itself' },
+        { at: 'vlrt.c:def:vneg', role: 'signs removed, restored' },
+        { at: 'vlrt.c:def:_d2v', role: 'conversions' },
+      ],
+      joints: [
+        { from: 'vlrt.c:def:_divv', to: 'vlrt.c:def:vneg', say: 'negatives' },
+        { from: 'vlrt.c:def:_divv', to: 'vlrt.c:def:dodiv', say: 'unsigned' },
+        { from: 'vlrt.c:type:Vlong', to: 'vlrt.c:def:dodiv', say: 'the operands' },
+      ],
+    },
+  ],
+}

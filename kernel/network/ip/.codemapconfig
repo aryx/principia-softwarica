@@ -1,0 +1,363 @@
+// kernel/network/ip/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, 12).
+// The book: lib_networking/Network.nw ("Software architecture": the
+// layers, and Proto, Medium, Netif as tables of methods).
+// claude: many functions here are declared before their body; def:
+// would land on the prototype, so those are anchored by code: on the
+// body's signature line.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The IP stack, #I: /net as files; TCP, UDP, IL over IP (v4 and v6), routes, ARP, interfaces on media.',
+  files: {
+    'ip.h': {
+      summary: "The stack's structures: Fs (a stack), Proto (a protocol's methods), Conv (a connection), Ipifc, Medium, Route.",
+      digest: '2de487ed535a',
+      capitals: [
+        { at: 'comment:"struct Conv (kernel)"', say: 'a conversation: /net/tcp/N, its queues' },
+        { at: 'comment:"struct Proto (kernel)"', say: "a protocol's methods: kick, rcv, connect..." },
+        { at: 'comment:"struct Fs (kernel)"', say: 'a whole IP stack: protocols, interfaces, routes' },
+      ],
+      important: [
+        { at: 'comment:"struct Medium (kernel)"', say: 'a link type: bind, bwrite; ethernet, loopback', weight: 3 },
+        { at: 'comment:"struct Ipifc (kernel)"', say: 'an interface: a medium, its addresses (Iplifc)', weight: 2 },
+        { at: 'comment:"struct Route (kernel)"', say: 'a route: a range, a gateway, an interface', weight: 2 },
+        { at: 'comment:"struct [[Ip4hdr]]"', say: 'the IPv4 header, as on the wire', weight: 1 },
+        { at: 'comment:"struct [[Arpent]]"', say: 'an ARP entry: IP to MAC, packets waiting', weight: 1 },
+        { at: 'comment:"coupling: include/ip.h"', say: 'types shared with user-space libip', weight: 1 },
+      ],
+      related: ['../../../include/net/ip.h', '../../../lib_networking/libip/'],
+    },
+    'devip.c': {
+      summary: 'The /net file server: clone, ctl, data per conversation; ctl messages become connect, announce, bind.',
+      digest: '5b646636db95',
+      capitals: [
+        { at: 'code:"ipwrite(Chan* ch"', say: 'ctl commands, data to the protocol' },
+        { at: 'def:Fsproto', say: 'a protocol registered: /net/<proto>' },
+      ],
+      important: [
+        { at: 'def:ipgen', say: 'the /net tree: protocols, conversations, files', weight: 2 },
+        { at: 'code:"cv = Fsprotoclone(p, ATTACHER(c))"', say: 'opening clone: a new conversation', weight: 3 },
+        { at: 'code:"return qread(cv->rq, a, n)"', say: 'reading data: the receive queue', weight: 3 },
+        { at: 'code:"qwrite(cv->wq, a, n)"', say: 'writing data: the protocol kicked', weight: 3 },
+        { at: 'def:connectctlmsg', say: "'connect addr!port'", weight: 2 },
+        { at: 'def:announcectlmsg', say: "'announce *!port': a listener", weight: 1 },
+        { at: 'def:Fsconnected', say: 'the protocol says: connected, wake the caller', weight: 1 },
+        { at: 'def:Fsnewcall', say: 'an incoming call for a listener', weight: 1 },
+        { at: 'def:ipdevtab', say: "#I's methods, in devtab", weight: 1 },
+      ],
+      links: [{ from: 'code:"ipwrite(Chan* ch"', to: 'def:connectctlmsg' }],
+      related: ['../../../lib_core/libc/9sys/dial.c'],
+    },
+    'ip.c': {
+      summary: 'IPv4: a packet routed and sent (fragmented if too big), a packet received, reassembled, handed up.',
+      digest: 'e7ff77f372a4',
+      capitals: [
+        { at: 'def:ipoput4', say: 'output: route, header, medium' },
+        { at: 'def:ipiput4', say: 'input: for me? then the protocol' },
+      ],
+      important: [
+        { at: 'code:"r = v4lookup(f, eh->dst, c)"', say: 'the route: which interface, which gateway', weight: 2 },
+        { at: 'code:"ifc->m->bwrite(ifc, bp, V4, gate)"', say: "down to the medium's method", weight: 3 },
+        { at: 'code:"ipoput4(f, bp, true, hop - 1, tos, &conv)"', say: 'not for me: forwarded (gating)', weight: 1 },
+        { at: 'code:"p = Fsrcvpcol(f, proto)"', say: 'the protocol by number', weight: 2 },
+        { at: 'code:"(*p->rcv)(p, ifc, bp)"', say: 'up to TCP, UDP...', weight: 3 },
+        { at: 'code:"ip4reassemble(IP *ip"', say: 'fragments put back together', weight: 1 },
+        { at: 'def:ip_init', say: 'the stack started', weight: 1 },
+      ],
+    },
+    'ipv6.c': {
+      summary: 'IPv6: the same as ip.c, output and input, with its extension headers and reassembly.',
+      digest: '52c3668b64f5',
+      capitals: [{ at: 'def:ipoput6', say: 'IPv6 out' }],
+      important: [
+        { at: 'def:ipiput6', say: 'IPv6 in', weight: 2 },
+        { at: 'code:"procxtns(IP *ip"', say: 'extension headers skipped', weight: 1 },
+      ],
+    },
+    'ipv6.h': {
+      summary: "IPv6's headers and well-known addresses.",
+      digest: '09f0eee07200',
+      important: [{ at: 'comment:"Internet Protocol Version 6"', say: 'the RFCs it follows', weight: 1 }],
+    },
+    'ipifc.c': {
+      summary: 'Interfaces: /net/ipifc, a medium bound, addresses added, the self cache (which addresses are mine).',
+      digest: '5824a37d9575',
+      capitals: [{ at: 'def:ipifcbind', say: "'bind ether /net/ether0': a medium" }],
+      important: [
+        { at: 'code:"ipifcadd(Ipifc *ifc"', say: "'add ip mask': an address, its routes", weight: 3 },
+        { at: 'def:addipmedium', say: 'the media known: ether, loopback...', weight: 1 },
+        { at: 'def:ipforme', say: 'is this address mine? the self cache', weight: 2 },
+        { at: 'def:findlocalip', say: 'a source address for a destination', weight: 1 },
+        { at: 'def:ipifcctl', say: 'the ctl file: add, remove, mtu...', weight: 1 },
+      ],
+    },
+    'iproute.c': {
+      summary: 'Routes: balanced trees of address ranges, looked up per packet; /net/iproute.',
+      digest: '21f788094a83',
+      capitals: [{ at: 'def:v4lookup', say: 'a destination to a route' }],
+      important: [
+        { at: 'def:v4addroute', say: 'a route added: a range in the tree', weight: 2 },
+        { at: 'def:rangecompare', say: 'ranges ordered, nested ones detected', weight: 1 },
+        { at: 'def:balancetree', say: 'the tree kept balanced', weight: 1 },
+        { at: 'def:routewrite', say: "'add', 'remove', 'flush' on /net/iproute", weight: 1 },
+      ],
+    },
+    'arp.c': {
+      summary: 'ARP: IP addresses to Ethernet addresses, a cache; packets held until the answer comes.',
+      digest: '094e58f204d4',
+      capitals: [{ at: 'def:arpget', say: 'the MAC for an IP, or a request sent' }],
+      important: [
+        { at: 'def:arpenter', say: 'an answer: the entry filled, held packets sent', weight: 3 },
+        { at: 'def:arpresolve', say: 'resolved: the waiting packets released', weight: 1 },
+        { at: 'def:arpwrite', say: '/net/arp: entries added by hand', weight: 1 },
+        { at: 'def:rxmitsols', say: 'IPv6 neighbour solicitations resent', weight: 1 },
+      ],
+    },
+    'ethermedium.c': {
+      summary: 'Ethernet as a medium: IP over #l, ARP sent and received, a reader process per packet type.',
+      digest: 'baf4120ba4e0',
+      capitals: [
+        { at: 'code:"etherbwrite(Ipifc *ifc"', say: 'an IP packet out: ARP, a frame' },
+        { at: 'code:"etherread4(void *a)"', say: 'the reader process: frames in, IP up' },
+      ],
+      important: [
+        { at: 'code:"etherbind(Ipifc *ifc"', say: 'the ether device opened, readers started', weight: 2 },
+        { at: 'code:"a = arpget(er->f->arp"', say: 'the MAC address, or wait for ARP', weight: 2 },
+        { at: 'code:"devtab[er->mchan4->type]->bwrite("', say: 'to the ether driver, through devtab', weight: 3 },
+        { at: 'code:"bp = devtab[er->mchan4->type]->bread("', say: 'from the ether driver: blocks', weight: 3 },
+        { at: 'code:"recvarp(Ipifc *ifc)"', say: 'an ARP packet: a request answered, a reply entered', weight: 2 },
+        { at: 'code:"sendarp(Ipifc *ifc"', say: 'who has this IP?', weight: 1 },
+      ],
+    },
+    'udp.c': {
+      summary: 'UDP: datagrams, a header and a checksum; the simplest Proto to read first.',
+      digest: 'b86fe5324cb8',
+      capitals: [{ at: 'def:udpinit', say: 'the Proto: its methods filled' }],
+      important: [
+        { at: 'code:"udpkick(void *x"', say: 'a datagram out: header, checksum, ipoput', weight: 3 },
+        { at: 'def:udpiput', say: 'a datagram in: its conversation found', weight: 3 },
+        { at: 'code:"qpass(c->rq, bp)"', say: 'into the receive queue, read by /net/udp/N/data', weight: 2 },
+        { at: 'def:udpcreate', say: 'writes bypass the queue: straight to kick', weight: 2 },
+      ],
+    },
+    'tcp.c': {
+      summary: 'TCP: the state machine, windows, retransmission, congestion control, SYN floods kept in limbo.',
+      digest: 'e77acecfc0a8',
+      capitals: [
+        { at: 'code:"tcpiput(Proto *tcp"', say: 'a segment in: the state machine' },
+        { at: 'code:"tcpoutput(Conv *s)"', say: 'segments out: as much as the window allows' },
+      ],
+      important: [
+        { at: 'comment:"the qlock in the Conv locks this structure"', say: 'Tcpctl: the connection control block', weight: 3 },
+        { at: 'comment:"New calls are put in limbo"', say: 'a SYN costs no Conv: flood defence', weight: 3 },
+        { at: 'code:"tcpincoming(Conv *s"', say: 'the handshake done: a Conv from limbo', weight: 2 },
+        { at: 'code:"update(Conv *s, Tcp *seg)"', say: 'an ACK: the window, RTT, congestion', weight: 2 },
+        { at: 'def:tcpcongestion', say: 'slow start and congestion avoidance', weight: 1 },
+        { at: 'code:"tcpkick(void *x)"', say: 'a write: output started', weight: 1 },
+        { at: 'def:tcpsetstate', say: 'the states: Listen, Syn_sent, Established...', weight: 1 },
+        { at: 'code:"tcptimeout(void *arg)"', say: 'retransmit timer: back off, resend', weight: 1 },
+      ],
+      links: [
+        { from: 'code:"tcpiput(Proto *tcp"', to: 'code:"update(Conv *s, Tcp *seg)"' },
+      ],
+    },
+    'il.c': {
+      summary: "IL: Plan 9's own reliable datagram protocol, for 9P over a LAN: simpler than TCP.",
+      digest: '7d4584d5a4f9',
+      capitals: [{ at: 'code:"iliput(Proto *il"', say: 'a packet in' }],
+      important: [
+        { at: 'comment:"struct [[Ilcb]]"', say: 'the connection block', weight: 2 },
+        { at: 'code:"_ilprocess(Conv *s"', say: 'the state machine', weight: 3 },
+        { at: 'code:"ilkick(void *x"', say: 'a message out', weight: 1 },
+      ],
+    },
+    'icmp.c': {
+      summary: 'ICMP: echo (ping), unreachable and TTL-exceeded messages; /net/icmp for ping itself.',
+      digest: '8c46b8c1171d',
+      capitals: [{ at: 'def:icmpiput', say: 'an ICMP packet in: echo answered' }],
+      important: [
+        { at: 'def:mkechoreply', say: 'the ping answered in place', weight: 2 },
+        { at: 'def:icmpunreachable', say: 'no one here: port unreachable', weight: 1 },
+      ],
+    },
+    'icmp6.c': {
+      summary: 'ICMPv6, with neighbour discovery (IPv6 has no ARP).',
+      digest: '2de94b645b85',
+      capitals: [{ at: 'def:icmpiput6', say: 'ICMPv6 in' }],
+      important: [
+        { at: 'def:icmpns', say: 'neighbour solicitation: IPv6 ARP', weight: 2 },
+        { at: 'def:icmpna', say: 'neighbour advertisement', weight: 1 },
+      ],
+    },
+    'ipaux.c': {
+      summary: 'Helpers: the protocol checksum, IPv6 constants, the conversation hash table (addresses and ports).',
+      digest: 'f97064fcc6c4',
+      capitals: [{ at: 'def:iphtlook', say: 'a packet to its conversation' }],
+      important: [{ at: 'def:ptclcsum', say: 'the ones-complement checksum', weight: 2 }],
+    },
+    'loopbackmedium.c': {
+      summary: 'The loopback medium: packets written come back as input, through a queue and a process.',
+      digest: 'f0fe339f5bd4',
+    },
+    'nullmedium.c': { summary: 'The null medium: packets dropped.', digest: '28caa88a65b3' },
+    'pktmedium.c': {
+      summary: 'A medium for packets written by a user program (a tunnel, PPP): no link header.',
+      digest: '1dfd3a900e4b',
+    },
+    'netlog.c': {
+      summary: '/net/log: the stack traces its own events, filtered by kind (tcp, ip, arp...).',
+      digest: 'e0826d2de0a7',
+      important: [{ at: 'def:netlog', say: 'a trace line, if its kind is on', weight: 1 }],
+    },
+    'chandial.c': {
+      summary: "dial() in the kernel: 'proto!dest' to a connected channel.",
+      digest: '69f5a6ba62a4',
+    },
+    'ptclbsum.c': {
+      summary: 'The checksum of a byte range, portable C (386/ has it in assembly).',
+      digest: '1f419efe1d60',
+    },
+  },
+  skeletons: [
+    skeletons.parts('The IP stack in layers (Network.nw)', [
+      ['devip.c', '/net: the stack as files'],
+      ['tcp.c', 'transport: reliable streams'],
+      ['udp.c', 'transport: datagrams'],
+      ['il.c', "transport: Plan 9's IL"],
+      ['icmp.c', 'control messages'],
+      ['ip.c', 'network: IPv4 in and out'],
+      ['ipv6.c', 'network: IPv6'],
+      ['iproute.c', 'routes'],
+      ['ipifc.c', 'interfaces and their addresses'],
+      ['ethermedium.c', 'link: IP over Ethernet'],
+      ['arp.c', 'IP to MAC'],
+      ['ip.h', 'Fs, Proto, Conv, Ipifc, Medium'],
+    ], [
+      ['devip.c', 'tcp.c', 'ctl and data: Proto methods'],
+      ['devip.c', 'udp.c', 'ctl and data'],
+      ['devip.c', 'ipifc.c', '/net/ipifc'],
+      ['tcp.c', 'ip.c', 'ipoput4'],
+      ['udp.c', 'ip.c', 'ipoput4'],
+      ['ip.c', 'iproute.c', 'v4lookup'],
+      ['ip.c', 'ethermedium.c', 'ifc->m->bwrite'],
+      ['ethermedium.c', 'arp.c', 'arpget'],
+      ['ethermedium.c', 'ip.c', 'ipiput4'],
+      ['ip.c', 'tcp.c', 'p->rcv'],
+      ['ip.c', 'udp.c', 'p->rcv'],
+    ]),
+    skeletons.chain('A UDP write, down to the wire', [
+      ['devip.c:code:"ipwrite(Chan* ch"', 'write on /net/udp/N/data', ''],
+      ['udp.c:code:"udpkick(void *x"', 'the UDP header, the checksum', 'the bytes, bypassing the queue'],
+      ['ip.c:def:ipoput4', 'the IP header, the route', 'a block'],
+      ['iproute.c:def:v4lookup', 'which interface, which gateway', 'the destination'],
+      ['ethermedium.c:code:"etherbwrite(Ipifc *ifc"', 'ARP, the Ethernet header', 'Medium.bwrite'],
+      ['arp.c:def:arpget', 'the next hop MAC', 'an IP address'],
+      ['../386/devether.c:def:etherbwrite', 'the ether driver: #l', 'devtab bwrite'],
+    ]),
+    skeletons.chain('A UDP packet received, up to read()', [
+      ['../386/devether.c:def:etheriq', 'the driver: the frame to its type', ''],
+      ['ethermedium.c:code:"etherread4(void *a)"', 'a kernel process reads #l', 'queued'],
+      ['ip.c:def:ipiput4', 'IP: mine? reassembled?', 'a block'],
+      ['udp.c:def:udpiput', 'UDP: its conversation found', 'p->rcv'],
+      ['ipaux.c:def:iphtlook', 'by addresses and ports', 'looked up'],
+      ['devip.c:code:"return qread(cv->rq, a, n)"', 'read on /net/udp/N/data', 'the receive queue'],
+    ]),
+    // the modules' own skeletons
+    skeletons.chain('devip.c: /net as files', [
+      ['devip.c:def:ipattach', 'the stack attached: #I0', ''],
+      ['devip.c:def:ipgen', 'the tree: /net/tcp/N/ctl...', 'walks'],
+      ['devip.c:def:ipopen', 'clone: a new conversation', 'opens'],
+      ['devip.c:code:"ipwrite(Chan* ch"', 'ctl: connect, announce; data out', 'writes'],
+      ['devip.c:def:ipread', 'data in, status, local, remote', 'reads'],
+      ['devip.c:def:Fsproto', 'the protocols registered', 'at init'],
+    ]),
+    skeletons.chain('ip.c: IPv4', [
+      ['ip.c:def:ip_init', 'the stack', ''],
+      ['ip.c:def:ipoput4', 'out: routed, fragmented', 'from transports'],
+      ['ip.c:def:ipiput4', 'in: from a medium', 'from media'],
+      ['ip.c:code:"ip4reassemble(IP *ip"', 'fragments reassembled', 'a fragment'],
+      ['ip.c:code:"ipcsum(uchar *addr)"', 'the header checksum', 'both ways'],
+    ]),
+    skeletons.chain('ipv6.c: IPv6', [
+      ['ipv6.c:def:ipoput6', 'out', ''],
+      ['ipv6.c:def:ipiput6', 'in', 'or'],
+      ['ipv6.c:code:"procxtns(IP *ip"', 'extension headers', 'headers'],
+      ['ipv6.c:code:"ip6reassemble(IP* ip"', 'reassembly', 'a fragment'],
+    ]),
+    skeletons.chain('ipifc.c: interfaces', [
+      ['ipifc.c:def:addipmedium', 'the media', ''],
+      ['ipifc.c:def:ipifcbind', 'a medium bound', 'bind'],
+      ['ipifc.c:code:"ipifcadd(Ipifc *ifc"', 'an address', 'add'],
+      ['ipifc.c:code:"addselfcache(Fs *f"', 'the self cache', 'mine'],
+      ['ipifc.c:def:ipforme', 'is it mine?', 'looked up'],
+    ]),
+    skeletons.chain('iproute.c: the route trees', [
+      ['iproute.c:def:v4addroute', 'a route added', ''],
+      ['iproute.c:code:"addnode(Fs *f"', 'into the tree', 'a node'],
+      ['iproute.c:def:balancetree', 'rebalanced', 'then'],
+      ['iproute.c:def:v4lookup', 'looked up per packet', 'later'],
+      ['iproute.c:def:routewrite', '/net/iproute', 'by users'],
+    ]),
+    skeletons.chain('arp.c: IP to MAC', [
+      ['arp.c:def:arpinit', 'the cache', ''],
+      ['arp.c:def:arpget', 'a lookup; a miss holds the packet', 'per packet'],
+      ['arp.c:def:arpenter', 'an answer entered', 'replies'],
+      ['arp.c:def:arpresolve', 'held packets released', 'resolved'],
+    ]),
+    skeletons.chain('ethermedium.c: IP over Ethernet', [
+      ['ethermedium.c:code:"etherbind(Ipifc *ifc"', '#l opened, readers started', ''],
+      ['ethermedium.c:code:"etherbwrite(Ipifc *ifc"', 'out: ARP then a frame', 'IP packets'],
+      ['ethermedium.c:code:"etherread4(void *a)"', 'in: frames read', 'a process'],
+      ['ethermedium.c:code:"recvarp(Ipifc *ifc)"', 'ARP packets', 'another process'],
+      ['ethermedium.c:code:"sendarp(Ipifc *ifc"', 'ARP requests', 'a miss'],
+    ]),
+    skeletons.chain('udp.c: the simplest protocol', [
+      ['udp.c:def:udpinit', 'the Proto', ''],
+      ['udp.c:def:udpcreate', 'queues for a conversation', 'create'],
+      ['udp.c:code:"udpkick(void *x"', 'out', 'writes'],
+      ['udp.c:def:udpiput', 'in', 'rcv'],
+    ]),
+    skeletons.chain('tcp.c: a connection', [
+      ['tcp.c:def:tcpinit', 'the Proto', ''],
+      ['tcp.c:code:"tcpsndsyn(Conv *s"', 'connect: SYN queued', 'connect'],
+      ['tcp.c:code:"tcpiput(Proto *tcp"', 'segments in, the states', 'SYN-ACK...'],
+      ['tcp.c:code:"limbo(Conv *s"', 'listening: SYNs in limbo', 'a SYN'],
+      ['tcp.c:code:"update(Conv *s, Tcp *seg)"', 'ACKs: window, RTT', 'ACKs'],
+      ['tcp.c:code:"tcpoutput(Conv *s)"', 'segments out', 'room to send'],
+    ]),
+    skeletons.chain('il.c: IL', [
+      ['il.c:def:ilinit', 'the Proto', ''],
+      ['il.c:code:"ilkick(void *x"', 'out', 'writes'],
+      ['il.c:code:"iliput(Proto *il"', 'in', 'rcv'],
+      ['il.c:code:"_ilprocess(Conv *s"', 'the states', 'a packet'],
+      ['il.c:code:"ilackproc(void *x)"', 'timers: acks, resends', 'a process'],
+    ]),
+    skeletons.chain('icmp.c: ICMP', [
+      ['icmp.c:def:icmpinit', 'the Proto', ''],
+      ['icmp.c:def:icmpiput', 'in: echo, unreachable', 'rcv'],
+      ['icmp.c:def:mkechoreply', 'a ping answered', 'echo request'],
+      ['icmp.c:def:icmpunreachable', 'errors sent', 'from ip, udp'],
+    ]),
+    skeletons.chain('icmp6.c: ICMPv6', [
+      ['icmp6.c:def:icmp6init', 'the Proto', ''],
+      ['icmp6.c:def:icmpiput6', 'in', 'rcv'],
+      ['icmp6.c:def:icmpns', 'neighbour solicitation', 'resolve'],
+      ['icmp6.c:def:icmpna', 'advertisement', 'answer'],
+    ]),
+    skeletons.chain('ipaux.c: conversations by address', [
+      ['ipaux.c:def:iphtadd', 'a conversation added', ''],
+      ['ipaux.c:def:iphtlook', 'a packet to its conversation', 'looked up'],
+      ['ipaux.c:def:ptclcsum', 'the checksum', 'beside'],
+    ]),
+    skeletons.chain('netlog.c: /net/log', [
+      ['netlog.c:def:netlogctl', 'kinds turned on', ''],
+      ['netlog.c:def:netlog', 'a line logged', 'filter'],
+      ['netlog.c:def:netlogread', '/net/log read', 'queued'],
+    ]),
+  ],
+  views: [
+    { name: 'The IP stack and its devices', files: ['devip.c', 'ip.c', 'udp.c', 'tcp.c', 'ethermedium.c', '../netif.c', '../386/devether.c'] },
+    { name: 'The user side', files: ['devip.c', '../../../lib_networking/', '../../../networking/'] },
+  ],
+}

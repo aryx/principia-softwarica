@@ -1,0 +1,93 @@
+// networking/exportfs/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "exportfs: a Plan 9 name space served over a connection as 9P; what cpu and import stand on.",
+  files: {
+    'exportfs.c': {
+      summary: 'exportfs: the 9P loop; messages read from the connection, dispatched by type, fids and qids tracked.',
+      digest: '4275c926cb50',
+      capitals: [{ at: 'def:main', say: 'auth, the root, then 9P messages forever' }],
+      important: [
+        { at: 'comment:exportfs - Export a plan 9 name space', say: 'the whole idea: a name space as a server', weight: 1 },
+        { at: 'def:fcalls', say: 'a handler per 9P message type', weight: 3 },
+        { at: 'code:"(fcalls[r->work.type])(r)"', say: 'dispatch', weight: 2 },
+        { at: 'def:getfid', say: "the client's fids, hashed", weight: 1 },
+        { at: 'def:uniqueqid', say: 'qids made unique across the servers underneath', weight: 2 },
+        { at: 'def:filter', say: 'the connection through a filter (e.g. compression)', weight: 1 },
+      ],
+    },
+    'exportsrv.c': {
+      summary: "The 9P handlers: attach, walk, stat... done locally; read and write by slave procs that may block.",
+      digest: '68c5d950371b',
+      capitals: [{ at: 'def:slave', say: 'blocking I/O handed to a proc' }],
+      important: [
+        { at: 'def:Xattach', say: 'the root, optionally a subtree', weight: 1 },
+        { at: 'def:Xwalk', say: 'a path walked in our name space', weight: 2 },
+        { at: 'def:Xflush', say: 'a pending read interrupted', weight: 1 },
+      ],
+    },
+    'exportfs.h': {
+      summary: "exportfs's types: Fsrpc (a message in flight), Fid, File (the tree of names), Proc (a slave), Qidtab.",
+      digest: '9bc28fe16084',
+      capitals: [{ at: 'type:Fsrpc', say: 'a 9P request in flight' }],
+      important: [
+        { at: 'type:Fid', say: "a client's fid: our fd and File", weight: 1 },
+        { at: 'type:Proc', say: 'a slave process', weight: 1 },
+      ],
+    },
+    'pattern.c': {
+      summary: 'The -P pattern file: which paths are exported, which hidden.',
+      digest: '6bc5815fc5cc',
+    },
+    'globals.c': {
+      summary: "exportfs's globals: fid and qid tables, the process list, the message size.",
+      digest: '1a4e9779fb96',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('exportfs: a name space served', 'exportfs.c:def:main', [
+      ['exportfs.c:def:initroot', 'the exported root', 'the -r or -S root'],
+      ['exportfs.c:def:fcalls', 'a message dispatched by type', 'a 9P message'],
+      ['exportsrv.c:def:Xwalk', 'done here: walk, stat, clunk...', 'Twalk'],
+      ['exportsrv.c:def:slave', 'or by a slave proc: read, write, open', 'Tread, Twrite'],
+    ], 'main: the connection authenticated, the root chosen'),
+    {
+      name: 'The handlers: exportsrv.c',
+      bones: [
+        { at: 'exportsrv.c:def:Xversion', role: 'the message size agreed' },
+        { at: 'exportsrv.c:def:Xattach', role: 'a root fid' },
+        { at: 'exportsrv.c:def:Xwalk', role: 'names to Files' },
+        { at: 'exportsrv.c:def:slave', role: 'blocking calls in procs' },
+        { at: 'exportsrv.c:def:Xflush', role: 'a slave interrupted' },
+      ],
+      joints: [
+        { from: 'exportsrv.c:def:Xattach', to: 'exportsrv.c:def:Xwalk', say: 'the root fid' },
+        { from: 'exportsrv.c:def:Xwalk', to: 'exportsrv.c:def:slave', say: 'an open fid read' },
+        { from: 'exportsrv.c:def:Xflush', to: 'exportsrv.c:def:slave', say: 'a note' },
+      ],
+    },
+    {
+      name: 'Exclusions: pattern.c',
+      bones: [
+        { at: 'pattern.c:def:exclusions', role: 'the pattern file read' },
+        { at: 'pattern.c:def:excludefile', role: 'a path checked' },
+        { at: 'pattern.c:def:preaddir', role: 'a directory read, filtered' },
+      ],
+      joints: [{ from: 'pattern.c:def:preaddir', to: 'pattern.c:def:excludefile', say: 'each entry' }],
+    },
+    skeletons.parts('exportfs', [
+      ['exportfs.c', 'the loop, fids, qids'],
+      ['exportsrv.c', 'the handlers'],
+      ['exportfs.h', 'the types'],
+      ['pattern.c', 'what is hidden'],
+      ['globals.c', 'the tables'],
+      ['../misc/', 'cpu and import, its clients'],
+    ], [
+      ['exportfs.c', 'exportsrv.c', 'fcalls'],
+      ['exportsrv.c', 'pattern.c', 'directory reads'],
+      ['../misc/', 'exportfs.c', 'run on the other end'],
+    ]),
+  ],
+}

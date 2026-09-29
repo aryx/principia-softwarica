@@ -1,0 +1,144 @@
+// kernel/init/386/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel_x86.nw (the ARM port is Kernel.nw's subject).
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The boot on a PC: multiboot entry, segmentation and paging set in assembly, then the same main as ARM, more devices.',
+  files: {
+    'main.c': {
+      digest: '191e308c1a31',
+      summary: "The PC kernel's main: the same sequence as ARM's, plus the PC's (CGA, i8253, MP tables, the x87 FPU).",
+      capitals: [
+        { at: 'code:"void main(void)"', say: 'the PC kernel starts here' },
+      ],
+      important: [
+        { at: 'def:options', say: "the multiboot command line: plan9.ini's variables", weight: 2 },
+        { at: 'def:confinit', say: 'memory counted: kernel and user pages split', weight: 3 },
+        { at: 'def:userinit', say: 'the first process, initcode in its text page', weight: 3 },
+        { at: 'def:init0', say: 'first process, kernel side: root, env, touser', weight: 2 },
+        { at: 'def:mathinit', say: 'the x87: its faults become notes', weight: 1 },
+        { at: 'code:"arch->intrinit()"', say: 'on an MP, the other processors started', weight: 2 },
+      ],
+      related: ['l.s', 'l_multiboot.s', '../arm/main.c'],
+    },
+    'l_multiboot.s': {
+      digest: '36535ea50c44',
+      summary: 'The multiboot header GRUB or QEMU look for, and the entry that jumps to l.s with the boot info.',
+      important: [
+        { at: 'comment:"global [[_multibootheader]](x86)"', say: 'magic, flags: found by the bootloader', weight: 2 },
+        { at: 'comment:"function [[_multibootentry]](x86)"', say: 'the data moved page-aligned, then l.s', weight: 2 },
+      ],
+    },
+    'l.s': {
+      digest: '2bd58521f534',
+      summary: 'From protected mode to main: a GDT, page tables mapping KZERO, BSS cleared, a stack, and the control registers.',
+      important: [
+        { at: 'comment:"function [[_setup_segmentation]](x86)"', say: 'flat segments: a GDT loaded', weight: 2 },
+        { at: 'comment:"function [[_setup_pagination]](x86)"', say: 'KZERO mapped, paging on', weight: 3 },
+        { at: 'def:_setpte', say: 'the first 4MB mapped, page by page', weight: 1 },
+        { at: 'comment:"function [[_setup_bss_stack]](x86)"', say: 'BSS cleared, cpu set, then CALL main', weight: 3 },
+        { at: 'comment:"CR3 - page directory base"', say: 'the control registers, for C', weight: 1 },
+      ],
+    },
+    'l_misc.s': {
+      digest: '25d71df5ce4a',
+      summary: 'Small x86 instructions for C: idle and halt, the timing loop, cpuid, rdmsr/wrmsr, invlpg, the cycle counter.',
+      important: [
+        { at: 'comment:"function [[idle]](x86)"', say: 'HLT until an interrupt', weight: 2 },
+        { at: 'comment:"Basic timing loop to determine CPU frequency"', say: 'AAM loops: the CPU speed measured', weight: 2 },
+        { at: 'def:_cpuid', say: "which x86: features for cpuidentify", weight: 1 },
+      ],
+    },
+    'l_fp.s': {
+      digest: '77a850d4c42f',
+      summary: 'The FPU from C: x87 and SSE state saved and restored, enabled and disabled lazily.',
+    },
+    'apbootstrap.s': {
+      digest: '43a7c8a52811',
+      summary: 'Where an application processor wakes, in real mode below 1MB: to protected mode, paging, then the C given.',
+      important: [
+        { at: 'comment:"Start an Application Processor"', say: 'copied to APBOOTSTRAP before the IPI', weight: 2 },
+      ],
+    },
+    'rebootcode.s': {
+      digest: 'bd1c9dc964cd',
+      summary: 'A new kernel over the old: paging off, a memmove, a jump to its entry.',
+    },
+  },
+  skeletons: [
+    skeletons.chain('The PC boot: bootloader to main', [
+      ['l_multiboot.s:comment:"global [[_multibootheader]](x86)"', 'found by GRUB or QEMU', ''],
+      ['l_multiboot.s:comment:"function [[_multibootentry]](x86)"', 'entered, in protected mode', 'jumps'],
+      ['l.s:comment:"function [[_setup_segmentation]](x86)"', 'a flat GDT', 'l.s'],
+      ['l.s:comment:"function [[_setup_pagination]](x86)"', 'KZERO mapped, paging on', 'then'],
+      ['l.s:comment:"function [[_setup_bss_stack]](x86)"', 'BSS, cpu, a stack', 'virtual'],
+      ['main.c:code:"void main(void)"', 'the kernel main', 'CALL main'],
+    ]),
+    {
+      name: 'The PC kernel main (main.c)',
+      bones: [
+        { at: 'main.c:code:"void main(void)"', role: 'the initializations, in order' },
+        { at: 'main.c:def:options', role: 'boot parameters' },
+        { at: 'main.c:def:confinit', role: 'Conf' },
+        { at: 'main.c:def:mathinit', role: 'the FPU' },
+        { at: 'main.c:def:userinit', role: 'the first process' },
+        { at: 'main.c:def:init0', role: 'its kernel side' },
+        { at: '../../processes/proc.c:def:schedinit', role: 'the scheduler' },
+      ],
+      joints: [
+        { from: 'main.c:code:"void main(void)"', to: 'main.c:def:options', say: 'first' },
+        { from: 'main.c:code:"void main(void)"', to: 'main.c:def:confinit', say: 'memory known' },
+        { from: 'main.c:code:"void main(void)"', to: 'main.c:def:mathinit', say: 'traps set' },
+        { from: 'main.c:code:"void main(void)"', to: 'main.c:def:userinit', say: 'devices reset' },
+        { from: 'main.c:code:"void main(void)"', to: '../../processes/proc.c:def:schedinit', say: 'never returns' },
+        { from: '../../processes/proc.c:def:schedinit', to: 'main.c:def:init0', say: 'first scheduled' },
+      ],
+    },
+    {
+      name: 'Protected mode to C (l.s)',
+      bones: [
+        { at: 'l.s:comment:"function [[_setup_segmentation]](x86)"', role: 'the GDT' },
+        { at: 'l.s:comment:"function [[_setup_pagination]](x86)"', role: 'the page tables' },
+        { at: 'l.s:def:_setpte', role: 'a PTE loop' },
+        { at: 'l.s:comment:"function [[_setup_bss_stack]](x86)"', role: 'BSS and stack' },
+        { at: 'main.c:code:"void main(void)"', role: 'C' },
+      ],
+      joints: [
+        { from: 'l.s:comment:"function [[_setup_segmentation]](x86)"', to: 'l.s:comment:"function [[_setup_pagination]](x86)"', say: 'segments set' },
+        { from: 'l.s:comment:"function [[_setup_pagination]](x86)"', to: 'l.s:def:_setpte', say: 'each page' },
+        { from: 'l.s:comment:"function [[_setup_pagination]](x86)"', to: 'l.s:comment:"function [[_setup_bss_stack]](x86)"', say: 'paging on' },
+        { from: 'l.s:comment:"function [[_setup_bss_stack]](x86)"', to: 'main.c:code:"void main(void)"', say: 'CALL main' },
+      ],
+    },
+    {
+      name: 'Instructions for C (l_misc.s)',
+      bones: [
+        { at: 'l_misc.s:comment:"function [[idle]](x86)"', role: 'the idle loop' },
+        { at: 'l_misc.s:def:_aamloop', role: 'the timing loop' },
+        { at: 'l_misc.s:def:_cpuid', role: 'the CPU identified' },
+        { at: '../../time/386/i8253.c', role: 'measures the speed' },
+        { at: '../../arch/386/x86.c', role: 'reads cpuid' },
+      ],
+      joints: [
+        { from: '../../time/386/i8253.c', to: 'l_misc.s:def:_aamloop', say: 'aamloop(n)' },
+        { from: '../../arch/386/x86.c', to: 'l_misc.s:def:_cpuid', say: 'cpuid()' },
+      ],
+    },
+    skeletons.parts('The PC boot files', [
+      ['l_multiboot.s', 'the multiboot entry'],
+      ['l.s', 'segments, paging, stack'],
+      ['main.c', 'the kernel main'],
+      ['l_misc.s', 'instructions C needs'],
+      ['l_fp.s', 'the FPU'],
+      ['apbootstrap.s', 'other processors wake'],
+      ['rebootcode.s', 'a new kernel loaded'],
+    ], [
+      ['l_multiboot.s', 'l.s', '_setup_segmentation'],
+      ['l.s', 'main.c', 'CALL main'],
+      ['main.c', 'l_fp.s', 'fpinit'],
+      ['main.c', 'apbootstrap.s', 'MP start'],
+      ['main.c', 'rebootcode.s', 'reboot'],
+    ]),
+  ],
+}

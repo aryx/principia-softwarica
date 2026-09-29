@@ -1,0 +1,193 @@
+// machine/5i/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12). The
+// book: ../Machine.nw ("Software architecture": main -> crackhdr,
+// initstk, initmemory, cmd -> run -> arm_class, the I* handlers, memory).
+local skeletons = import '../../skeletons.libsonnet';
+local M(f, name, steps) = skeletons.chain(name, [[f + ':' + s[0], s[1], s[2]] for s in steps]);
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: '5i, the ARM emulator: a Plan 9 ARM a.out run instruction by instruction, its system calls done by the host, under a db-like debugger.',
+  files: {
+    'arm.h': {
+      digest: '4100e2905e80',
+      summary: "The emulated machine: Registers (r0-r15, the flags, the current instruction), Memory as Segments, Inst (a handler), Tlb, Icache.",
+      capitals: [
+        { at: 'type:Registers', say: 'the CPU: registers, flags, the instruction' },
+        { at: 'type:Inst', say: 'an instruction class: its handler' },
+      ],
+      important: [
+        { at: 'type:Segment', say: 'text, data, bss, stack', weight: 2 },
+        { at: 'type:Memory', say: 'the address space', weight: 1 },
+        { at: 'type:Breakpoint', say: 'a breakpoint or watchpoint', weight: 1 },
+      ],
+    },
+    '5i.c': {
+      digest: '43a3eb073c4e',
+      summary: 'main: the a.out opened, its header cracked (libmach), memory and stack set up with argv, then the debugger\'s command loop.',
+      capitals: [{ at: 'def:main', say: '5i starts here' }],
+      important: [
+        { at: 'def:inithdr', say: 'the a.out header, by crackhdr', weight: 2 },
+        { at: 'def:initmemory', say: 'the segments loaded', weight: 2 },
+        { at: 'def:initstk', say: 'argc and argv on the stack, as exec does', weight: 2 },
+      ],
+    },
+    'run.c': {
+      digest: 'e9ceb3131610',
+      summary: 'The CPU: the fetch-decode-execute loop, the condition codes, and one handler per ARM instruction class.',
+      capitals: [{ at: 'def:run', say: 'fetch, decode, check the condition, execute' }],
+      important: [
+        { at: 'def:itab', say: 'the classes and their handlers', weight: 2 },
+        { at: 'code:"(*reg.ip->func)(reg.instr)"', say: 'the dispatch', weight: 3 },
+        { at: 'def:arm_class', say: 'the decoder: 32 bits to a class', weight: 3 },
+        { at: 'def:runcmp', say: 'the condition field against the flags', weight: 2 },
+        { at: 'def:dpex', say: 'data processing: ADD, SUB, MOV, CMP...', weight: 2 },
+        { at: 'def:shift', say: 'the barrel shifter on operand 2', weight: 1 },
+        { at: 'def:Imem1', say: 'LDR and STR', weight: 1 },
+        { at: 'def:Ib', say: 'a branch', weight: 1 },
+      ],
+    },
+    'mem.c': {
+      digest: '66c6cdb649fc',
+      summary: 'Emulated memory: fetches, loads and stores of each width, through a tiny TLB to the segments\' pages.',
+      important: [
+        { at: 'def:ifetch', say: 'an instruction fetched', weight: 2 },
+        { at: 'def:getmem_w', say: 'a word loaded', weight: 1 },
+        { at: 'def:putmem_w', say: 'a word stored', weight: 1 },
+        { at: 'def:memio', say: 'bytes between host and emulated memory', weight: 2 },
+        { at: 'def:page_of_vaddr', say: 'an address to its page, or a fault', weight: 2 },
+      ],
+    },
+    'syscall.c': {
+      digest: '803597bda321',
+      summary: "System calls: SWI traps to Ssyscall, which reads the arguments from the emulated stack and does the call on the host.",
+      capitals: [{ at: 'def:Ssyscall', say: 'SWI: the call number to its handler' }],
+      important: [
+        { at: 'def:systab', say: 'the system calls, by number', weight: 2 },
+        { at: 'def:sysopen', say: 'a path copied out, the host opens', weight: 1 },
+        { at: 'def:sysread', say: 'the host reads into emulated memory', weight: 1 },
+        { at: 'def:sysbrk', say: 'the data segment grown', weight: 1 },
+        { at: 'def:sysrfork', say: 'fork: not really supported', weight: 1 },
+      ],
+    },
+    'cmd.c': {
+      digest: '66888e20fbd6',
+      summary: 'The debugger: a db-like command language (:c continue, :s step, $r registers, breakpoints, expressions).',
+      capitals: [{ at: 'def:cmd', say: 'the command loop: read, run' }],
+      important: [
+        { at: 'def:colon', say: ':c, :s, :b...', weight: 2 },
+        { at: 'def:dollar', say: '$r, $c...: state printed', weight: 1 },
+        { at: 'def:expr', say: 'addresses as expressions', weight: 1 },
+        { at: 'def:catcher', say: 'an interrupt stops the run', weight: 1 },
+      ],
+    },
+    'bpt.c': {
+      digest: 'fc00f5791b6f',
+      summary: 'Breakpoints and watchpoints, checked on each instruction and memory access.',
+      important: [{ at: 'def:brkchk', say: 'hit?', weight: 1 }],
+    },
+    'stats.c': {
+      digest: '2162601dcebd',
+      summary: 'Statistics: instruction counts per class, TLB and segment use, a per-function profile.',
+      important: [
+        { at: 'def:isum', say: 'instructions by class', weight: 1 },
+        { at: 'def:iprofile', say: 'time per function', weight: 1 },
+      ],
+    },
+    'symbols.c': {
+      digest: 'f82704261384',
+      summary: 'Source lines, locals, parameters and stack traces, by the symbol tables (libmach).',
+      important: [{ at: 'def:stktrace', say: 'the call stack', weight: 1 }],
+    },
+    'icache.c': { digest: '7833a9527112', summary: 'An instruction cache model, a stub.' },
+    'utils.c': { digest: '83b08d109d1e', summary: 'Errors, the trace, register dumps, memory allocation.' },
+    'globals.c': {
+      digest: '36a134cf7f72',
+      summary: "5i's state: the registers, the memory, the TLB, breakpoints, the symbol map.",
+      important: [
+        { at: 'def:reg', say: 'the CPU', weight: 2 },
+        { at: 'def:memory', say: 'the memory', weight: 2 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.cmd("5i: an ARM program run (the book's)", '5i.c:def:main', [
+      ['5i.c:def:inithdr', 'the a.out header', 'first'],
+      ['5i.c:def:initstk', 'the stack and argv', 'then'],
+      ['cmd.c:def:cmd', 'the debugger', 'then'],
+      ['run.c:def:run', 'the fetch-decode-execute loop', ':c'],
+      ['run.c:def:arm_class', 'decode', 'each instruction'],
+      ['run.c:def:dpex', 'an instruction executed', 'dispatched'],
+      ['mem.c:def:getmem_w', 'memory', 'loads, stores'],
+      ['syscall.c:def:Ssyscall', 'a system call, on the host', 'SWI'],
+    ]),
+    skeletons.parts("5i's parts", [
+      ['5i.c', 'loading'],
+      ['cmd.c', 'the debugger'],
+      ['run.c', 'the CPU'],
+      ['mem.c', 'the memory'],
+      ['syscall.c', 'the kernel, emulated'],
+      ['arm.h', 'the machine\'s state'],
+    ], [
+      ['5i.c', 'cmd.c', 'then'],
+      ['cmd.c', 'run.c', ':c, :s'],
+      ['run.c', 'mem.c', 'fetches, loads, stores'],
+      ['run.c', 'syscall.c', 'SWI'],
+      ['syscall.c', 'mem.c', 'arguments, buffers'],
+    ]),
+    M('5i.c', 'Loading a program', [
+      ['def:main', 'the flags, the file', ''],
+      ['def:inithdr', 'the header', 'cracked'],
+      ['def:initmemory', 'the segments', 'loaded'],
+      ['def:initstk', 'the stack', 'argv'],
+    ]),
+    M('run.c', 'The CPU', [
+      ['def:run', 'the loop', ''],
+      ['def:arm_class', 'decode', 'an instruction'],
+      ['def:runcmp', 'condition', 'executed?'],
+      ['def:itab', 'the handlers', 'dispatch'],
+      ['def:dpex', 'data processing', 'e.g.'],
+      ['def:shift', 'operand 2 shifted', 'operand'],
+    ]),
+    M('mem.c', 'Memory', [
+      ['def:ifetch', 'fetch', ''],
+      ['def:getmem_w', 'load', 'loads'],
+      ['def:putmem_w', 'store', 'stores'],
+      ['def:dotlb', 'the TLB', 'translated'],
+      ['def:page_of_vaddr', 'the page', 'found'],
+    ]),
+    M('syscall.c', 'System calls', [
+      ['def:Ssyscall', 'the trap', ''],
+      ['def:systab', 'by number', 'dispatched'],
+      ['def:sysopen', 'e.g. open', 'e.g.'],
+      ['def:sysread', 'and read', 'e.g.'],
+    ]),
+    M('cmd.c', 'The debugger', [
+      ['def:cmd', 'the loop', ''],
+      ['def:expr', 'an address', 'parsed'],
+      ['def:colon', 'a : command', 'commands'],
+      ['def:dollar', 'a $ command', 'or'],
+    ]),
+    M('stats.c', 'Statistics', [
+      ['def:isum', 'instructions', ''],
+      ['def:tlbsum', 'the TLB', 'then'],
+      ['def:iprofile', 'the profile', 'then'],
+    ]),
+  ],
+  views: [
+    { name: '5i and vi (MIPS)', files: ['run.c', '../vi/run.c', 'mem.c', '../vi/mem.c', 'syscall.c', '../vi/syscall.c', 'cmd.c', '../vi/cmd.c'] },
+  ],
+  tours: [
+    {
+      name: 'An ARM instruction emulated',
+      stops: [
+        { at: '5i.c:def:main', say: 'The a.out loaded as the kernel would: header, segments, argv on the stack.' },
+        { at: 'cmd.c:def:cmd', say: 'You start in the debugger; :c runs.' },
+        { at: 'run.c:def:run', say: 'Fetch, decode, test the condition: every ARM instruction is conditional.' },
+        { at: 'run.c:def:arm_class', say: 'The decoder: the bits that pick an instruction class.' },
+        { at: 'run.c:def:dpex', say: 'Data processing, with the barrel shifter and the flags.' },
+        { at: 'mem.c:def:page_of_vaddr', say: 'Memory accesses go through the segments.' },
+        { at: 'syscall.c:def:Ssyscall', say: 'SWI: the program asks the kernel; 5i asks the host.' },
+      ],
+    },
+  ],
+}

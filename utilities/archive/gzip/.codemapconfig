@@ -1,0 +1,103 @@
+// utilities/archive/gzip/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The book: Utilities.nw, chapter "Archiving" (gzip, gunzip).
+local skeletons = import '../../../skeletons.libsonnet';
+local flate = '../../../lib_strings/libflate/';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "Compression: gzip and zip wrap libflate's deflate in their file formats' headers and CRC-32 trailers.",
+  files: {
+    'gzip.c': {
+      summary: 'gzip: a file deflated into a .gz: a 10-byte header, the deflate stream, CRC-32 and length.',
+      digest: '08862f71a6bb',
+      capitals: [{ at: 'def:gzip', say: 'the .gz format around one deflate call' }],
+      important: [
+        { at: 'code:"err = deflate(bout, gzwrite"', say: 'libflate does the work; callbacks read and write', weight: 3 },
+        { at: 'def:crcread', say: 'the input read and its CRC updated as deflate pulls', weight: 2 },
+        { at: 'def:gzipf', say: 'a file to file.gz, or stdout with -c', weight: 1 },
+      ],
+    },
+    'gunzip.c': {
+      summary: 'gunzip: .gz members inflated in turn, their header parsed, CRC and length checked.',
+      digest: '29c8cc6803f4',
+      capitals: [{ at: 'def:gunzip', say: 'each member: header, inflate, trailer' }],
+      important: [
+        { at: 'code:"err = inflate((void*)ofd, crcwrite"', say: 'libflate inflates, pulling bytes by Bgetc', weight: 3 },
+        { at: 'def:header', say: 'magic, method, flags, optional name', weight: 2 },
+        { at: 'def:trailer', say: 'the CRC and length must match', weight: 2 },
+        { at: 'code:"if(setjmp(zjmp))"', say: 'errors longjmp back here', weight: 1 },
+      ],
+    },
+    'gzip.h': {
+      summary: "The gzip format's constants: magic 1f 8b, method 8 (deflate), header flags, the CRC polynomial.",
+      digest: 'e0884a624f45',
+    },
+    'zip.c': {
+      summary: 'zip: files and trees deflated into a .zip: a local header per entry, a central directory at the end.',
+      digest: '590abd03fbec',
+      important: [
+        { at: 'def:zip', say: 'an entry: header, deflate, trailer', weight: 3 },
+        { at: 'def:putCDir', say: 'the central directory, written last', weight: 2 },
+        { at: 'def:zipDir', say: 'a directory recursed into', weight: 1 },
+      ],
+    },
+    'unzip.c': {
+      summary: 'unzip: entries extracted (or listed) via the central directory found from the end, or streamed (-s).',
+      digest: '27e87d945785',
+      important: [
+        { at: 'def:findCDir', say: 'the end record: where the directory starts', weight: 3 },
+        { at: 'def:unztable', say: 'the central directory walked', weight: 2 },
+        { at: 'def:unzipEntry', say: 'an entry: its local header, then inflate', weight: 3 },
+        { at: 'def:msdos2time', say: 'MS-DOS date and time to seconds', weight: 1 },
+      ],
+    },
+    'zip.h': {
+      summary: "The zip format: header magics, flag bits, ZipHead (an entry's header, local or central).",
+      digest: '8fa12418a02a',
+      important: [{ at: 'type:ZipHead', say: 'an entry, as both headers describe it', weight: 2 }],
+    },
+  },
+  skeletons: [
+    skeletons.parts('Two formats around one compressor', [
+      ['gzip.c', 'one stream in a .gz'],
+      ['gunzip.c', 'its inverse'],
+      ['zip.c', 'many files in a .zip'],
+      ['unzip.c', 'its inverse'],
+      ['gzip.h', "gzip's format"],
+      ['zip.h', "zip's format"],
+      [flate, 'libflate: deflate and inflate (LZ77 + Huffman)'],
+    ], [
+      ['gzip.c', 'gzip.h', 'the header'],
+      ['gunzip.c', 'gzip.h', 'the header'],
+      ['zip.c', 'zip.h', 'ZipHead'],
+      ['unzip.c', 'zip.h', 'ZipHead'],
+      ['gzip.c', flate, 'deflate'],
+      ['zip.c', flate, 'deflate'],
+      ['gunzip.c', flate, 'inflate'],
+      ['unzip.c', flate, 'inflate'],
+    ]),
+    skeletons.cmd('gzip: compress', 'gzip.c:def:main', [
+      ['gzip.c:def:gzipf', 'a file opened, file.gz created', 'each file'],
+      ['gzip.c:def:gzip', 'header, deflate, trailer', 'the fds'],
+      [flate + 'deflate.c:def:deflate', 'the compression', 'callbacks'],
+    ]),
+    skeletons.cmd('gunzip: decompress', 'gunzip.c:def:main', [
+      ['gunzip.c:def:gunzipf', 'file.gz opened, file created', 'each file'],
+      ['gunzip.c:def:gunzip', 'each member', 'a Biobuf'],
+      ['gunzip.c:def:header', 'the header parsed', 'a member'],
+      [flate + 'inflate.c:def:inflate', 'the decompression', 'the stream'],
+      ['gunzip.c:def:trailer', 'the CRC checked', 'the end'],
+    ]),
+    skeletons.cmd('zip: archive and compress', 'zip.c:def:main', [
+      ['zip.c:def:zip', 'an entry, or a tree', 'each file'],
+      [flate + 'deflate.c:def:deflate', 'its bytes compressed', 'a file'],
+      ['zip.c:def:putCDir', 'the central directory', 'at the end'],
+    ]),
+    skeletons.cmd('unzip: extract', 'unzip.c:def:main', [
+      ['unzip.c:def:unzip', 'the archive, by its directory', 'the file'],
+      ['unzip.c:def:findCDir', 'the directory found from the end', 'a seek'],
+      ['unzip.c:def:unzipEntry', 'an entry extracted', 'each wanted'],
+      [flate + 'inflate.c:def:inflate', 'its bytes', 'deflated'],
+    ]),
+  ],
+}

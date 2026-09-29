@@ -1,0 +1,244 @@
+// lib_graphics/libmemdraw/: what the code map says of it (Graphics.nw:
+// "the actual rendering", memimagedraw and the Memimage, linked into the
+// kernel under devdraw's drawmesg)
+local skeletons = import '../../skeletons.libsonnet';
+
+local kinds = ['def:', 'type:', 'comment:', 'code:', 'line:', 'section:', 'module:'];
+local here(file, a) = if std.length(std.filter(function(k) std.startsWith(a, k), kinds)) > 0 then file + ':' + a else a;
+local mod(file, name, bones, joints=[]) = {
+  name: name,
+  bones: [{ at: here(file, b[0]), role: b[1] } for b in bones],
+  joints: [{ from: here(file, j[0]), to: here(file, j[1]), say: j[2] } for j in joints],
+};
+local fn(name) = 'comment:"function [[' + name + ']]"';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'libmemdraw: the pixels themselves -- images in memory (Memimage) drawn, composited, lined, filled; linked into the kernel.',
+  files: {
+    'draw.c': {
+      summary: 'memimagedraw: the one compositing operation, clipped, then its fastest applicable path: hardware, memset, glyphs, or alphadraw.',
+      digest: '48b9c2c6005f',
+      capitals: [{ at: 'def:memimagedraw', say: "every pixel drawn on Plan 9 goes through here" }],
+      important: [
+        { at: 'def:drawclip', say: 'dst clipped, src and mask rectangles adjusted to match', weight: 3 },
+        { at: 'code:"if(hwdraw(&par)){"', say: 'a video driver may do it', weight: 2 },
+        { at: 'code:"if(memoptdraw(&par)){"', say: 'solid fills and copies: memset, memmove', weight: 3 },
+        { at: 'code:"if(chardraw(&par)){"', say: 'text: a colour through a boolean mask', weight: 2 },
+        { at: 'code:"alphadraw(&par);"', say: 'the general case, pixel by pixel', weight: 3 },
+      ],
+    },
+    'alphadraw.c': {
+      summary: 'The general case of draw: each line read into buffers of RGBA, combined by a Porter-Duff operator, written back.',
+      digest: 'b9aae6161e23',
+      capitals: [{ at: 'def:alphadraw', say: 'compositing, pixel by pixel' }],
+      important: [
+        { at: 'def:MUL', say: 'x*y/255, rounded, without a division', weight: 2 },
+        { at: 'def:alphacalc', say: 'a function per Porter-Duff operator', weight: 3 },
+        { at: 'code:"rdsrc = readfn(src)"', say: 'any pixel format read into a common buffer', weight: 2 },
+        { at: fn('alphacalc11'), say: 'SoverD: the usual one', weight: 2 },
+        { at: fn('readbyte'), weight: 1 },
+        { at: fn('writebyte'), weight: 1 },
+        { at: fn('boolcopyfn'), say: 'the shortcut: a copy through a boolean mask', weight: 1 },
+      ],
+    },
+    'alloc.c': {
+      summary: 'Memimages allocated: their pixels (Memdata) in the image memory pool, and freed.',
+      digest: '84b90c2aaffe',
+      important: [{ at: 'def:allocmemimage', weight: 2 }, { at: 'def:allocmemimaged', say: 'an image over given data (the framebuffer)', weight: 2 }, { at: 'def:freememimage', weight: 1 }],
+    },
+    'init.c': {
+      summary: 'memimageinit: the pool of image memory, and the constant images (ones, zeros, white, black, opaque).',
+      digest: '3ed8a680a432',
+      important: [{ at: 'def:imagmem', say: 'the pool the pixels come from', weight: 2 }, { at: 'def:memopaque', weight: 1 }],
+    },
+    'line.c': {
+      summary: 'Thick lines with ends (square, disc, arrow), drawn as a polygon or with a disc brush.',
+      digest: 'c0ac0b90fdc2',
+      important: [
+        { at: 'def:_memimageline', weight: 3 },
+        { at: 'def:membrush', say: 'a disc image, stamped for round ends', weight: 1 },
+        { at: 'def:arrowend', weight: 1 },
+        { at: 'def:memlinebbox', say: 'what the line may touch: for layers', weight: 1 },
+      ],
+    },
+    'fillpoly.c': {
+      summary: 'Polygons filled by scan conversion: edges sorted, spans filled line by line (winding or even-odd).',
+      digest: '452110abd625',
+      important: [
+        { at: 'def:_memfillpolysc', weight: 2 },
+        { at: fn('xscan'), say: 'horizontal spans: the fill', weight: 3 },
+        { at: fn('yscan'), say: 'vertical spans: thin details not lost', weight: 1 },
+        { at: 'type:Seg', say: 'an edge in fixed point', weight: 1 },
+      ],
+    },
+    'ellipse.c': {
+      summary: "Ellipses, thick or filled, by an incremental midpoint algorithm.",
+      digest: '485480c058d8',
+      important: [{ at: 'def:memellipse', weight: 2 }, { at: 'def:step', say: 'the next point of the curve', weight: 2 }, { at: 'def:newstate', weight: 1 }],
+    },
+    'arc.c': {
+      summary: 'Arcs: an ellipse drawn through a mask of the wanted angles.',
+      digest: '27ae0bd4e3eb',
+    },
+    'poly.c': {
+      summary: 'mempoly: an open polygon as a series of lines.',
+      digest: '52762bb0a3da',
+    },
+    'color.c': {
+      summary: 'Pixel values to RGBA and back, for any format; images filled with a colour.',
+      digest: 'f7a311f4d4c8',
+      important: [{ at: 'def:imgtorgba', weight: 1 }, { at: 'def:rgbatoimg', weight: 1 }, { at: 'def:memfillcolor', weight: 1 }],
+    },
+    'cmap.c': {
+      summary: 'The default 8-bit colour map, as a table (generated by scripts/mkcmap).',
+      digest: '0da1168074a1',
+    },
+    'chan.c': {
+      summary: "memsetchan: an image's pixel format set, its channels' shifts and masks computed.",
+      digest: '3166256932b2',
+    },
+    'resolution.c': {
+      summary: 'The address of a pixel, and its bits.',
+      digest: '0e425dc9cf2b',
+      important: [{ at: 'def:byteaddr', weight: 1 }],
+    },
+    'transfer.c': {
+      summary: "Pixels copied into and out of a Memimage (the kernel's side of loadimage).",
+      digest: '0fe9288b4457',
+    },
+    'io.c': {
+      summary: 'Image files read and written for Memimages, compressed or not.',
+      digest: '439a1936725d',
+      important: [{ at: 'def:readmemimage', weight: 1 }, { at: 'def:writememimage', weight: 1 }],
+    },
+    'compressed.c': {
+      summary: 'cloadmemimage: compressed pixels loaded into a Memimage.',
+      digest: '59bbdda7c424',
+    },
+    'string.c': {
+      summary: "memimagestring: text drawn directly on a Memimage, for the kernel's graphical console.",
+      digest: 'a3179af06a77',
+    },
+    'subfont.c': {
+      summary: 'Memsubfonts allocated.',
+      digest: 'eb1b25cf0186',
+    },
+    'defont.c': {
+      summary: 'The default font as a Memsubfont (from libdraw\'s defont data).',
+      digest: 'f77c89cbacd3',
+    },
+    'hooks.c': {
+      summary: 'Hooks the kernel may override: hwdraw (no hardware help here) and iprint.',
+      digest: '43af6475f4e6',
+    },
+    'replmul.c': {
+      summary: 'A table generator (with a hoc script) for replicating small pixel values to bytes.',
+      digest: '3da3fd53e1b3',
+    },
+  },
+  skeletons: [
+    skeletons.parts('libmemdraw: from a draw to the pixels', [
+      ['draw.c', 'memimagedraw: clip, then the fastest path'],
+      ['alphadraw.c', 'the general path: per-pixel compositing'],
+      ['line.c', 'shapes: lines, and fillpoly.c, ellipse.c'],
+      ['alloc.c', 'Memimages and their memory'],
+      ['color.c', 'pixel formats to RGBA'],
+      ['init.c', 'the pool and the constant images'],
+    ], [
+      ['draw.c', 'alphadraw.c', 'what no shortcut handles'],
+      ['line.c', 'draw.c', 'shapes end as draws'],
+      ['alphadraw.c', 'color.c', 'pixels converted'],
+      ['alloc.c', 'init.c', 'from its pool'],
+    ]),
+    mod('draw.c', 'memimagedraw: the paths of a draw', [
+      ['def:memimagedraw', 'the call'],
+      ['def:drawclip', 'the rectangles clipped'],
+      ['code:"if(hwdraw(&par)){"', 'hardware'],
+      [fn('memoptdraw'), 'memset and memmove'],
+      [fn('chardraw'), 'glyphs'],
+      ['alphadraw.c:def:alphadraw', 'the general case'],
+    ], [
+      ['def:memimagedraw', 'def:drawclip', 'dst, src, mask'],
+      ['def:memimagedraw', 'code:"if(hwdraw(&par)){"', 'a Memdrawparam'],
+      ['def:memimagedraw', fn('memoptdraw'), 'else'],
+      ['def:memimagedraw', fn('chardraw'), 'else'],
+      ['def:memimagedraw', 'alphadraw.c:def:alphadraw', 'else'],
+    ]),
+    mod('alphadraw.c', 'alphadraw: read, compute, write, line by line', [
+      ['def:alphadraw', 'the loop over lines'],
+      [fn('readfn'), 'a reader for the format'],
+      ['def:alphacalc', 'the operator'],
+      [fn('alphacalc11'), 'SoverD'],
+      [fn('writefn'), 'a writer for the format'],
+      [fn('convfn'), 'or a conversion, for copies'],
+    ], [
+      ['def:alphadraw', fn('readfn'), 'src, mask, dst'],
+      ['def:alphadraw', 'def:alphacalc', 'op'],
+      ['def:alphacalc', fn('alphacalc11'), 'SoverD'],
+      ['def:alphadraw', fn('writefn'), 'the result'],
+      ['def:alphadraw', fn('convfn'), 'a boolean mask'],
+    ]),
+    mod('alloc.c', 'Memimages', [
+      ['def:allocmemimage', 'a new image'],
+      ['def:allocmemimaged', 'over its data'],
+      ['def:freememimage', 'freed'],
+      ['def:memimagemove', 'the pool compacted: data moved'],
+    ], [['def:allocmemimage', 'def:allocmemimaged', 'Memdata from the pool'], ['def:memimagemove', 'def:allocmemimaged', 'a new base']]),
+    mod('line.c', 'A thick line', [
+      ['def:_memimageline', 'the line'],
+      ['def:discend', 'a round end'],
+      ['def:arrowend', 'an arrow'],
+      ['def:membrush', 'the disc'],
+      ['fillpoly.c:def:_memfillpolysc', 'the body, as a polygon'],
+    ], [
+      ['def:_memimageline', 'fillpoly.c:def:_memfillpolysc', 'four corners'],
+      ['def:_memimageline', 'def:discend', 'Enddisc'],
+      ['def:_memimageline', 'def:arrowend', 'Endarrow'],
+      ['def:discend', 'def:membrush', 'radius'],
+    ]),
+    mod('fillpoly.c', 'Scan conversion', [
+      ['def:memfillpoly', 'the call'],
+      ['def:_memfillpolysc', 'edges made'],
+      [fn('xscan'), 'spans by lines'],
+      [fn('yscan'), 'spans by columns'],
+      [fn('zsort'), 'edges sorted'],
+      ['def:fillline', 'a span filled'],
+    ], [
+      ['def:memfillpoly', 'def:_memfillpolysc', 'vertices'],
+      ['def:_memfillpolysc', fn('xscan'), 'Segs'],
+      ['def:_memfillpolysc', fn('yscan'), 'detail'],
+      [fn('xscan'), fn('zsort'), 'active edges'],
+      [fn('xscan'), 'def:fillline', 'a span'],
+    ]),
+    mod('ellipse.c', 'An ellipse, incrementally', [
+      ['def:memellipse', 'the call'],
+      ['def:newstate', 'the state of the curve'],
+      ['def:step', 'one step'],
+      [fn('bellipse'), 'a thin ellipse'],
+      [fn('erect'), 'a span drawn'],
+    ], [
+      ['def:memellipse', 'def:newstate', 'a, b'],
+      ['def:memellipse', 'def:step', 'each point'],
+      ['def:memellipse', fn('bellipse'), 'thin'],
+      ['def:memellipse', fn('erect'), 'spans'],
+    ]),
+    mod('color.c', 'Pixels and colours', [
+      ['def:imgtorgba', 'a pixel to RGBA'],
+      ['def:rgbatoimg', 'RGBA to a pixel'],
+      ['def:memfillcolor', 'an image filled'],
+    ], [['def:memfillcolor', 'def:rgbatoimg', 'the colour']]),
+    mod('cmap.c', 'The colour map', [
+      ['def:def', 'the table'],
+      ['def:memdefcmap', 'the default map'],
+      ['def:_memmkcmap', 'made'],
+    ], [['def:def', 'def:memdefcmap', 'used']]),
+    mod('io.c', 'Image files, for Memimages', [
+      ['def:readmemimage', 'read'],
+      ['def:creadmemimage', 'compressed, read'],
+      ['def:writememimage', 'written, compressed'],
+    ], [['def:readmemimage', 'def:creadmemimage', "'compressed'"]]),
+  ],
+  views: [
+    { name: 'The kernel side of draw', files: ['.', '../libmemlayer/', '../../kernel/devices/screen/'] },
+  ],
+}

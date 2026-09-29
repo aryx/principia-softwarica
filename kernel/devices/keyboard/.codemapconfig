@@ -1,0 +1,118 @@
+// kernel/devices/keyboard/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The book: Kernel.nw's "The keyboard".
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'Scan codes to runes: the keyboard maps, shift and compose, handed to the console; /dev/kbmap, /dev/kbin.',
+  files: {
+    'portkbd.c': {
+      digest: '54d94d8825f9',
+      summary: 'The portable keyboard: scan code tables (plain, shift, esc, altgr, ctrl) and kbdputsc, which turns a code into a rune.',
+      capitals: [
+        { at: 'def:kbdputsc', say: 'a scan code in, a rune to the console' },
+      ],
+      important: [
+        { at: 'def:kbtab', say: 'the US map: scan code to rune', weight: 2 },
+        { at: 'comment:"e0\'s is the first of a 2 character sequence"', say: 'escape prefixes: two tables more', weight: 1 },
+        { at: 'comment:"Ctl-Alt-Del"', say: 'the reboot, right in the interrupt', weight: 1 },
+        { at: 'comment:"adding the character in kbd staging area"', say: 'to devcons: kbdputc', weight: 3 },
+        { at: 'code:"c = latin1(kbscan->kc, kbscan->nk)"', say: 'compose: Alt then two keys, one rune', weight: 2 },
+        { at: 'def:kbdputmap', say: 'a map line from /dev/kbmap', weight: 1 },
+      ],
+      related: ['../../console/devcons.c', 'latin1.c'],
+    },
+    'portkbtab.c': {
+      digest: '0246175807bb',
+      summary: "The Ctrl scan-code table alone, a partial duplicate of portkbd.c's, for a configuration without it.",
+    },
+    'latin1.c': {
+      digest: '167887cbcf46',
+      summary: 'Compose sequences: Alt and two keys (a e, o /) to one rune, or X and four hex digits.',
+      important: [
+        { at: 'def:latin1', say: 'more keys needed, a rune, or none', weight: 2 },
+        { at: 'def:unicode', say: 'X then hex digits: any rune', weight: 1 },
+      ],
+    },
+    'latin1.h': {
+      digest: '92b9c423f1c1',
+      summary: 'The table of compose sequences, two characters to a rune, included by latin1.c.',
+    },
+    'devkbmap.c': {
+      digest: 'c7f97934287a',
+      summary: '/dev/kbmap: the keyboard tables read and rewritten as text lines, table, scan code, rune.',
+      important: [
+        { at: 'def:kbmapread', say: 'the tables printed a line per key', weight: 2 },
+        { at: 'def:kbmapwrite', say: 'lines parsed: a key remapped', weight: 3 },
+        { at: 'def:kbmapdevtab', say: 'the Dev: #b in devtab', weight: 1 },
+      ],
+      related: ['user/kbmap.c'],
+    },
+    'devkbin.c': {
+      digest: 'b0bcc859c40f',
+      summary: '/dev/kbin: scan codes written by a user program (usbd on the Pi) enter the same path as an interrupt.',
+      capitals: [
+        { at: 'def:kbinwrite', say: 'USB keys: scan codes from user space' },
+      ],
+      related: ['../../buses/user/usb/kb/'],
+    },
+  },
+  skeletons: [
+    skeletons.parts('The keyboard: a scan code to a rune', [
+      ['386/', 'the PC: the i8042 interrupt'],
+      ['devkbin.c', 'the Pi: codes written by usbd to /dev/kbin'],
+      ['portkbd.c', 'the maps: a code to a rune'],
+      ['latin1.c', 'compose sequences'],
+      ['devkbmap.c', 'the maps as a file'],
+      ['../../console/devcons.c', 'the console: kbdputc, /dev/cons'],
+      ['user/', 'kbmap: a map chosen'],
+    ], [
+      ['386/', 'portkbd.c', 'kbdputsc, from the interrupt'],
+      ['devkbin.c', 'portkbd.c', 'kbdputsc, external'],
+      ['portkbd.c', 'latin1.c', 'a compose sequence'],
+      ['portkbd.c', '../../console/devcons.c', 'kbdputc: the rune'],
+      ['devkbmap.c', 'portkbd.c', 'kbdputmap, kbdgetmap'],
+      ['user/', 'devkbmap.c', 'writes a map'],
+    ]),
+    skeletons.chain('A key pressed on a PC, to the console', [
+      ['386/kbd.c:def:i8042intr', 'the interrupt: a byte from port 0x60', ''],
+      ['portkbd.c:def:kbdputsc', 'escape, shift, ctrl: a rune', 'the scan code'],
+      ['latin1.c:def:latin1', 'compose, maybe', 'while collecting'],
+      ['../../console/devcons.c:def:kbdputc', 'into kbdq, for /dev/cons', 'the rune'],
+    ]),
+    {
+      name: 'portkbd.c: tables and a state machine',
+      bones: [
+        { at: 'portkbd.c:def:kbtab', role: 'the tables, per modifier' },
+        { at: 'portkbd.c:def:kbscans', role: "each source's state: shift, ctl, esc" },
+        { at: 'portkbd.c:def:kbdputsc', role: 'a code in' },
+        { at: 'latin1.c:def:latin1', role: 'compose' },
+        { at: 'portkbd.c:def:kbdputmap', role: 'a table entry changed' },
+        { at: '../../console/devcons.c:def:kbdputc', role: 'the rune out' },
+      ],
+      joints: [
+        { from: 'portkbd.c:def:kbscans', to: 'portkbd.c:def:kbdputsc', say: 'the modifiers held' },
+        { from: 'portkbd.c:def:kbtab', to: 'portkbd.c:def:kbdputsc', say: 'the rune looked up' },
+        { from: 'portkbd.c:def:kbdputsc', to: 'latin1.c:def:latin1', say: 'the keys collected' },
+        { from: 'portkbd.c:def:kbdputsc', to: '../../console/devcons.c:def:kbdputc', say: 'the rune' },
+        { from: 'portkbd.c:def:kbdputmap', to: 'portkbd.c:def:kbtab', say: 'a rune set' },
+      ],
+    },
+    {
+      name: 'devkbmap.c: the maps as text',
+      bones: [
+        { at: 'devkbmap.c:def:kbmapdevtab', role: 'the Dev' },
+        { at: 'devkbmap.c:def:kbmapread', role: 'the maps out' },
+        { at: 'devkbmap.c:def:kbmapwrite', role: 'lines in' },
+        { at: 'portkbd.c:def:kbdgetmap', role: 'an entry read' },
+        { at: 'portkbd.c:def:kbdputmap', role: 'an entry set' },
+      ],
+      joints: [
+        { from: 'devkbmap.c:def:kbmapdevtab', to: 'devkbmap.c:def:kbmapread', say: 'read' },
+        { from: 'devkbmap.c:def:kbmapdevtab', to: 'devkbmap.c:def:kbmapwrite', say: 'write' },
+        { from: 'portkbd.c:def:kbdgetmap', to: 'devkbmap.c:def:kbmapread', say: 'table, code, rune' },
+        { from: 'devkbmap.c:def:kbmapwrite', to: 'portkbd.c:def:kbdputmap', say: 'table, code, rune' },
+      ],
+    },
+  ],
+}

@@ -1,0 +1,102 @@
+// kernel/buses/user/usb/kb/: what the code map says of it (tinybox
+// codemap; the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12)
+local skeletons = import '../../../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "usb/kb: the USB keyboard and mouse (the Pi's only ones), their reports turned into scan codes for #Ι/kbin and #m/mousein.",
+  files: {
+    'kb.c': {
+      digest: 'c305404e9112',
+      summary: 'The HID driver: key reports to PC scan codes (with key repeat), mouse reports to mouse(3) events.',
+      capitals: [
+        { at: 'def:kbdwork', say: 'a key report read, scan codes written' },
+      ],
+      important: [
+        { at: 'comment:"Keyboard keycodes are translated to scan codes and sent to kbin(3)"', say: 'the kernel still sees a PC keyboard', weight: 3 },
+        { at: 'def:kbdin', say: '#Ι/kbin: where the scan codes go', weight: 2 },
+        { at: 'def:sctab', say: 'HID usage codes to scan codes', weight: 2 },
+        { at: 'def:putkeys', say: 'keys down and up: the old report vs the new', weight: 2 },
+        { at: 'def:repeatproc', say: 'key repeat, done here: USB does not repeat', weight: 1 },
+        { at: 'def:ptrwork', say: 'a mouse report to "m x y buttons"', weight: 2 },
+        { at: 'def:setbootproto', say: "the boot protocol: fixed reports, no parsing", weight: 1 },
+        { at: 'def:kbmain', say: 'the entry: from main.c, or embedded in usbd', weight: 2 },
+      ],
+      links: [
+        { from: 'def:kbmain', to: 'def:kbstart' },
+        { from: 'def:kbdwork', to: 'def:putkeys' },
+        { from: 'def:putkeys', to: 'def:putscan' },
+      ],
+      related: ['../../../../devices/keyboard/devkbin.c', '../../../../devices/mouse/devmouse.c'],
+    },
+    'hid.c': {
+      digest: '0565ac8d9d5d',
+      summary: "HID report descriptors, roughly parsed for mice: where the buttons and axes sit in a report's bits.",
+      important: [
+        { at: 'comment:"which do appear (sigh!)"', say: 'fields not aligned on bytes', weight: 1 },
+        { at: 'def:parsereportdesc', say: 'the descriptor: a template of fields', weight: 3 },
+        { at: 'def:parsereport', say: 'a report read with the template', weight: 2 },
+        { at: 'def:getbits', say: 'a field of any width at any bit', weight: 1 },
+        { at: 'def:hidifcval', say: "a field's value by its usage", weight: 1 },
+      ],
+    },
+    'hid.h': {
+      digest: '66d37e5edf7a',
+      summary: 'The HID constants and types: KbdCSP and PtrCSP, Chain (bits of a report), HidRepTempl (its fields).',
+      important: [
+        { at: 'type:HidRepTempl', say: "a report's layout, from its descriptor", weight: 2 },
+        { at: 'type:Chain', say: 'a report as a stream of bits', weight: 1 },
+      ],
+    },
+    'main.c': {
+      digest: '5e1a9c762d9c',
+      summary: 'usb/kb as a program: its flags, then the keyboards and mice found and started.',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('usb/kb: keys and mouse to the kernel', 'main.c:def:threadmain', [
+      ['../lib/devs.c:def:startdevs', 'the HID devices found', 'KbdCSP, PtrCSP'],
+      ['kb.c:def:kbmain', 'a device: keyboard or mouse', 'a process each'],
+      ['kb.c:def:kbstart', 'its interrupt endpoint opened', 'kbdwork or ptrwork'],
+      ['kb.c:def:kbdwork', 'reports read, forever', 'the endpoint'],
+      ['kb.c:def:putkeys', 'the keys that changed', 'a report'],
+      ['../../../../devices/keyboard/devkbin.c', '#Ι/kbin: as if from the PC keyboard', 'scan codes'],
+    ], main_role='threadmain: flags (-k keyboard only, -m mouse)'),
+    {
+      name: 'The HID driver: a report to scan codes or mouse events',
+      bones: [
+        { at: 'kb.c:def:kbmain', role: 'the entry' },
+        { at: 'kb.c:def:kbstart', role: 'a work process started' },
+        { at: 'kb.c:def:kbdwork', role: 'the keyboard loop' },
+        { at: 'kb.c:def:putkeys', role: 'a report compared to the last' },
+        { at: 'kb.c:def:putscan', role: 'a scan code written' },
+        { at: 'kb.c:def:repeatproc', role: 'repeat while held' },
+        { at: 'kb.c:def:ptrwork', role: 'the mouse loop' },
+      ],
+      joints: [
+        { from: 'kb.c:def:kbmain', to: 'kb.c:def:kbstart', say: 'kbdwork, ptrwork' },
+        { from: 'kb.c:def:kbstart', to: 'kb.c:def:kbdwork', say: 'a keyboard' },
+        { from: 'kb.c:def:kbstart', to: 'kb.c:def:ptrwork', say: 'a mouse' },
+        { from: 'kb.c:def:kbdwork', to: 'kb.c:def:putkeys', say: 'the report' },
+        { from: 'kb.c:def:putkeys', to: 'kb.c:def:putscan', say: 'down and up' },
+        { from: 'kb.c:def:repeatproc', to: 'kb.c:def:putscan', say: 'the held key again' },
+      ],
+    },
+    {
+      name: 'A HID report, parsed',
+      bones: [
+        { at: 'hid.c:def:parsereportdesc', role: 'the descriptor to a template' },
+        { at: 'hid.h:type:HidRepTempl', role: 'the template' },
+        { at: 'hid.c:def:parsereport', role: 'a report decoded' },
+        { at: 'hid.c:def:getbits', role: 'a field' },
+        { at: 'hid.c:def:hidifcval', role: 'a value by usage' },
+      ],
+      joints: [
+        { from: 'hid.c:def:parsereportdesc', to: 'hid.h:type:HidRepTempl', say: 'fields' },
+        { from: 'hid.h:type:HidRepTempl', to: 'hid.c:def:parsereport', say: 'the layout' },
+        { from: 'hid.c:def:parsereport', to: 'hid.c:def:getbits', say: 'each field' },
+        { from: 'hid.c:def:parsereport', to: 'hid.c:def:hidifcval', say: 'values' },
+      ],
+    },
+  ],
+}

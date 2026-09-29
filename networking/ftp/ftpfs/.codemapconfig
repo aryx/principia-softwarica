@@ -1,0 +1,95 @@
+// networking/ftp/ftpfs/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'ftpfs: an FTP site mounted as files; 9P requests turned into FTP commands, directories and files cached.',
+  files: {
+    'ftpfs.c': {
+      summary: 'ftpfs: the 9P server; the site dialed and logged into, then messages served, a handler per type.',
+      digest: 'f0bac558b1b9',
+      capitals: [{ at: 'def:main', say: 'hello, login, mount, serve' }],
+      important: [
+        { at: 'def:fcalls', say: 'a handler per 9P message', weight: 2 },
+        { at: 'def:io', say: 'the 9P loop', weight: 2 },
+        { at: 'def:rwalk', say: 'a walk: the directory listed if not cached', weight: 2 },
+        { at: 'def:rread', say: 'a file fetched into the cache, then read', weight: 2 },
+        { at: 'def:kaproc', say: 'NOOPs so the server keeps us', weight: 1 },
+      ],
+    },
+    'proto.c': {
+      summary: 'The FTP side: dialing, login, commands and replies, LIST output parsed for Unix, VMS, MVS, NT...',
+      digest: '0c8c45a15feb',
+      capitals: [{ at: 'def:readdir', say: 'LIST parsed into Nodes' }],
+      important: [
+        { at: 'def:hello', say: 'the site dialed, its greeting read', weight: 1 },
+        { at: 'def:preamble', say: 'the remote OS guessed from SYST', weight: 2 },
+        { at: 'def:crackdir', say: 'a LIST line parsed: every OS differs', weight: 3 },
+        { at: 'def:sendrequest', say: 'a command', weight: 1 },
+        { at: 'def:getreply', say: 'a reply: its code and text', weight: 1 },
+        { at: 'def:passive', say: 'PASV: the data connection', weight: 1 },
+        { at: 'def:readfile', say: 'RETR into the cache', weight: 1 },
+      ],
+    },
+    'file.c': {
+      summary: 'The cache: file contents kept in temporary files, read and written, marked dirty until stored.',
+      digest: 'a0618b4ca6e9',
+      important: [{ at: 'def:fileread', say: 'read from the cached copy', weight: 1 }],
+    },
+    'ftpfs.h': {
+      summary: "ftpfs's types: Node (a remote file or directory, cached), OS (the remote system), and the prototypes.",
+      digest: '15c8a12c05e1',
+      capitals: [{ at: 'type:Node', say: 'a remote file, cached' }],
+    },
+  },
+  skeletons: [
+    skeletons.cmd('ftpfs: an FTP site as files', 'ftpfs.c:def:main', [
+      ['proto.c:def:hello', 'the site dialed', 'the host'],
+      ['proto.c:def:preamble', 'logged in, its OS guessed', ''],
+      ['ftpfs.c:def:io', 'the 9P loop', 'mounted'],
+      ['ftpfs.c:def:rwalk', 'a walk', 'Twalk'],
+      ['proto.c:def:readdir', 'a directory listed', 'not cached'],
+    ]),
+    {
+      name: 'The FTP side: proto.c',
+      bones: [
+        { at: 'proto.c:def:readdir', role: 'LIST' },
+        { at: 'proto.c:def:readfile', role: 'RETR' },
+        { at: 'proto.c:def:data', role: 'the data connection' },
+        { at: 'proto.c:def:sendrequest', role: 'a command' },
+        { at: 'proto.c:def:getreply', role: 'its reply' },
+        { at: 'proto.c:def:crackdir', role: 'a listing line parsed' },
+      ],
+      joints: [
+        { from: 'proto.c:def:readdir', to: 'proto.c:def:data', say: 'PASV or PORT' },
+        { from: 'proto.c:def:readfile', to: 'proto.c:def:data', say: '' },
+        { from: 'proto.c:def:data', to: 'proto.c:def:sendrequest', say: 'the command' },
+        { from: 'proto.c:def:sendrequest', to: 'proto.c:def:getreply', say: '' },
+        { from: 'proto.c:def:readdir', to: 'proto.c:def:crackdir', say: 'each line' },
+      ],
+    },
+    {
+      name: 'The cache: file.c',
+      bones: [
+        { at: 'file.c:def:filewrite', role: 'bytes cached' },
+        { at: 'file.c:def:fileread', role: 'bytes read back' },
+        { at: 'file.c:def:filedirty', role: 'to be stored' },
+        { at: 'file.c:def:uncachedir', role: 'a directory forgotten' },
+      ],
+      joints: [
+        { from: 'file.c:def:filewrite', to: 'file.c:def:fileread', say: 'the temporary file' },
+        { from: 'file.c:def:filewrite', to: 'file.c:def:filedirty', say: 'a user write' },
+      ],
+    },
+    skeletons.parts('ftpfs', [
+      ['ftpfs.c', 'the 9P side'],
+      ['proto.c', 'the FTP side'],
+      ['file.c', 'the cache between'],
+      ['ftpfs.h', 'Node'],
+    ], [
+      ['ftpfs.c', 'proto.c', 'uncached: ask the site'],
+      ['proto.c', 'file.c', 'contents cached'],
+      ['ftpfs.c', 'file.c', 'reads, writes'],
+    ]),
+  ],
+}

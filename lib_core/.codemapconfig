@@ -1,0 +1,56 @@
+// lib_core/: what the code map says of it (tinybox codemap; its manual:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md). The book:
+// Libcore.nw (the libraries, its two "Software architecture" sections:
+// libc's layers, libthread's), Libcore_extra.nw, Libcore_arm.nw; the
+// history: lineage.txt. The interfaces (libc.h, bio.h, thread.h) are in
+// include/, described with include/.
+local skeletons = import '../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The core libraries every program is written with: libc (system calls, malloc, print, strings), libbio (buffered I/O), libthread (threads and channels).',
+  skeletons: [
+    skeletons.parts('The core libraries, layered', [
+      ['libthread/', 'threads, channels, alt: over everything, replacing main'],
+      ['libbio/', 'buffered I/O: Biobuf over read and write'],
+      ['libc/', 'the C library: system calls up to print and malloc'],
+      ['../include/', 'their interfaces: libc.h, bio.h, thread.h'],
+      ['../kernel/', 'what the system calls reach'],
+    ], [
+      ['libthread/', 'libc/', 'rendezvous, rfork, setjmp, qlock hooks'],
+      ['libbio/', 'libc/', 'read, write, dofmt'],
+      ['libc/', '../kernel/', 'system calls'],
+      ['libc/', '../include/', 'declared in'],
+    ]),
+    skeletons.chain('print("hello") to the screen, through the libraries', [
+      ['libc/fmt/print.c:def:libc_print', 'print: stdout', ''],
+      ['libc/fmt/vfprint.c:def:vfprint', 'a buffer on the stack', 'va_list'],
+      ['libc/fmt/dofmt.c:def:dofmt', 'the text formatted into it', 'a Fmt'],
+      ['libc/fmt/vfprint.c:def:_fmtFdFlush', 'one write', 'the bytes'],
+      ['libc/9sys/write.c:def:write', 'pwrite at the current offset', 'write'],
+      ['libc/9syscall/', 'the stub: SWI', 'pwrite'],
+      ['../kernel/files/sysfile.c:def:syspwrite', 'the kernel writes the file', 'trap'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'The core libraries: what every program stands on',
+      stops: [
+        { at: 'libc/arm/main9.s:code:"TEXT    _main"', say: 'Every program starts in _main, which calls main and then exits.' },
+        { at: 'libc/9syscall/sys.h:def:RFORK', say: 'The system calls are numbered here; a generated stub per call traps into the kernel.' },
+        { at: 'libc/9sys/read.c:def:read', say: 'read is not a system call: pread at the current offset.' },
+        { at: 'libc/port/malloc.c:def:malloc', say: 'malloc is a thin front on one Pool that grows by sbrk.' },
+        { at: 'libc/port/pool.c:def:poolallocl', say: 'The allocator: best fit in a tree of free lists, arenas added when none fits.' },
+        { at: 'libc/fmt/dofmt.c:def:dofmt', say: 'print and every variant end in dofmt, which formats into a Fmt buffer and flushes it.' },
+        { at: 'libc/port/rune.c:def:chartorune', say: 'UTF-8, invented for Plan 9, decoded in a few lines.' },
+        { at: 'libc/9sys/qlock.c:def:qlock', say: 'Locks that sleep in the rendezvous system call; libthread swaps in its own rendezvous.' },
+        { at: 'libbio/bgetc.c:def:Bgetc', say: 'libbio: a byte from the buffer, a read() of a whole buffer when it runs out.' },
+        { at: 'libthread/channel.c:def:alt', say: 'libthread: every channel operation is an alt, waiting in a rendezvous.' },
+      ],
+    },
+  ],
+  views: [
+    { name: 'libc and its interface', files: ['libc/', '../include/core/'] },
+    { name: 'Formatted output: print, Bprint', files: ['libc/fmt/', 'libbio/bprint.c', 'libbio/bvprint.c'] },
+    { name: 'Memory: malloc to brk', files: ['libc/port/malloc.c', 'libc/port/pool.c', 'libc/9sys/sbrk.c', 'libc/port/lock.c'] },
+  ],
+}

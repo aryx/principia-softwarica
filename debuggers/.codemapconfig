@@ -1,0 +1,59 @@
+// debuggers/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// The book: Debugger.nw (acid, ratrace, libmach, /proc), db.nw (db, an
+// appendix), Debugger_x86.nw; its architecture from Debugger.nw's
+// "Software architecture": the debugging process drives the debugged
+// one through /proc/<pid>/ (ctl, mem, regs), libmach in between.
+local skeletons = import '../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The debuggers: acid (programmable), db (adb-like), tracers and snapshots, all over /proc and libmach.',
+  dirs: {
+    misc: { summary: 'rc scripts over acid: kmem, umem, leak -- memory leaks found by acid libraries.' },
+    docs: { summary: "The papers: Winterbottom's acid manual and paper, the ratrace paper." },
+  },
+  skeletons: [
+    skeletons.parts('Debugging on Plan 9: a process drives another through /proc', [
+      ['acid/', 'acid: a language to debug with (the book)'],
+      ['db/', 'db: fixed one-letter commands (the appendix)'],
+      ['tracers/', 'ratrace: system calls; ktrace: kernel stacks'],
+      ['snap/', 'a process saved, served back as a /proc'],
+      ['libmach/', 'executables, symbols, maps, disassemblers'],
+      ['../kernel/devices/sys/devproc.c', '/proc/<pid>/: ctl, mem, regs, syscall'],
+    ], [
+      ['acid/', 'libmach/', 'symbols, memory, instructions'],
+      ['db/', 'libmach/', 'the same'],
+      ['acid/', '../kernel/devices/sys/devproc.c', 'ctl messages, mem'],
+      ['db/', '../kernel/devices/sys/devproc.c', 'ctl messages, mem'],
+      ['tracers/', '../kernel/devices/sys/devproc.c', 'startsyscall'],
+      ['snap/', '../kernel/devices/sys/devproc.c', 'reads, then imitates'],
+    ]),
+    skeletons.chain('A breakpoint (acid): set, hit, reported', [
+      ['acid/builtin.c:def:newproc', 'new(): the program forked, stopped at its start', ''],
+      ['libmach/access.c:def:put1', "bpset: machdata's bpinst written into the text", 'bpset'],
+      ['acid/proc.c:def:msg', 'cont: startstop to /proc/<pid>/ctl', 'cont()'],
+      ['../kernel/devices/sys/devproc.c', 'the kernel stops it at the trap', 'startstop'],
+      ['libmach/machdata.c:def:risctrace', 'stk(): the stack walked by the sp table', 'stopped'],
+      ['libmach/sym.c:def:fileline', 'each pc as file:line', 'each frame'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'How acid debugs a program',
+      stops: [
+        { at: 'acid/main.c:def:main', say: 'Flags, the a.out cracked by libmach, /lib/acid/port.acid loaded, then the REPL.' },
+        { at: 'libmach/executable.c:def:crackhdr', say: 'The header tells the machine: ARM, x86 or MIPS; the rest follows.' },
+        { at: 'libmach/sym.c:def:syminit', say: "The symbol table the linker left: names, lines, stack offsets." },
+        { at: 'acid/exec.c:def:execute', say: 'Each statement parsed by yacc runs here.' },
+        { at: 'acid/expr.c:def:ocall', say: 'A call: most of the debugger is acid code; the C builtins are the rest.' },
+        { at: 'acid/proc.c:def:nproc', say: 'new(): fork, hang, exec -- the child stops before running a line.' },
+        { at: 'libmach/5db.c:def:armmach', say: "ARM's breakpoint instruction and its follow set, for single steps." },
+        { at: 'db/trcrun.c:def:runstep', say: 'db steps the same way: temporary breakpoints on every next pc.' },
+      ],
+    },
+  ],
+  views: [
+    { name: 'The two debuggers and their library', files: ['acid/', 'db/', 'libmach/'] },
+    { name: 'The kernel side', files: ['../kernel/devices/sys/devproc.c', 'tracers/ratrace.c', 'acid/proc.c', 'db/trcrun.c'] },
+  ],
+}

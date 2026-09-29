@@ -1,0 +1,321 @@
+// security/auth/factotum/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The design: ../../docs/auth.ms ("Security in Plan 9",
+// Cox, Grosse, Pike, Presotto, Quinlan, 2002), its factotum section.
+local skeletons = import '../../../skeletons.libsonnet';
+
+// an authentication protocol of factotum: a Proto record (its name and
+// its functions), its init, write and read (the messages, one phase at a
+// time), called by rpc.c through the record's pointers
+local proto(file, rec, name, init, write, read, role) = {
+  name: name,
+  bones: [
+    { at: file + ':def:' + rec, role: 'the Proto record: its functions, called by pointer' },
+    { at: file + ':' + init, role: 'start: the key found, the first phase set' },
+    { at: file + ':' + write, role: 'a message in: the phase advanced' },
+    { at: file + ':' + read, role: 'a message out, for this phase' },
+    { at: 'util.c:def:findkey', role: 'the key, matched by its attributes' },
+    { at: 'rpc.c:def:rpcread', role: 'the caller: an RPC run' },
+  ],
+  joints: [
+    { from: 'rpc.c:def:rpcread', to: file + ':' + init, say: 'start proto=... (via Proto.init)' },
+    { from: file + ':' + init, to: 'util.c:def:findkey', say: 'which key' },
+    { from: 'rpc.c:def:rpcread', to: file + ':' + write, say: 'write: the peer\'s bytes' },
+    { from: 'rpc.c:def:rpcread', to: file + ':' + read, say: 'read: bytes for the peer' },
+  ] + role,
+};
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "factotum, the user's security agent: holds the keys, speaks every authentication protocol, served as /mnt/factotum.",
+  files: {
+    'dat.h': {
+      summary: "factotum's types: a Key (attributes, public and secret), a Proto's functions, an Fsstate per conversation.",
+      digest: '70cf8ae36f91',
+      capitals: [
+        { at: 'type:Proto', say: 'a protocol: init, write, read, close by pointer' },
+        { at: 'type:Fsstate', say: 'one conversation on /mnt/factotum/rpc' },
+        { at: 'type:Key', say: 'a key: attributes, the ! ones secret' },
+      ],
+      important: [
+        { at: 'comment:"common protocol phases"', say: 'Notstarted, Established: the phases rpc.c knows', weight: 2 },
+        { at: 'def:prototab', say: 'the protocols, a table in fs.c', weight: 1 },
+      ],
+    },
+    'fs.c': {
+      summary: 'The main: flags, keys from nvram and secstore, then the 9P file server /mnt/factotum (rpc, ctl, needkey, confirm, log).',
+      digest: '46b5870d65d6',
+      capitals: [
+        { at: 'def:main', say: "factotum starts: the host owner's key, secstore, mount" },
+        { at: 'def:prototab', say: 'every protocol factotum speaks' },
+      ],
+      important: [
+        { at: 'def:private', say: 'no debugger, no swap: the keys stay in memory', weight: 2 },
+        { at: 'code:"secstorefetch(secstorepw)"', say: 'the keys downloaded from secstore at boot', weight: 2 },
+        { at: 'code:"postmountsrv(&fs, service, mtpt, MBEFORE)"', say: 'served as a file system, mounted before /mnt', weight: 3 },
+        { at: 'def:dirtab', say: 'the files: rpc, proto, confirm, needkey, ctl, log', weight: 2 },
+        { at: 'def:fsread', say: 'a read dispatched by file: rpc to rpcread', weight: 2 },
+        { at: 'def:fswrite', say: 'a write: rpc, or a ctl command', weight: 1 },
+        { at: 'def:keylist', say: 'reading ctl lists the keys, secrets hidden', weight: 1 },
+      ],
+      links: [
+        { from: 'def:fsread', to: 'def:keylist' },
+        { from: 'def:fsread', to: 'def:protolist' },
+      ],
+      related: ['../../docs/auth.ms'],
+    },
+    'rpc.c': {
+      summary: 'The rpc file: a write sets up a verb (start, read, write, authinfo), the next read runs it through the Proto.',
+      digest: '367286fa423f',
+      capitals: [
+        { at: 'def:rpcread', say: 'an RPC run: the protocol stepped by pointer' },
+      ],
+      important: [
+        { at: 'comment:"Must be paired write/read cycles"', say: 'the RPC protocol programs speak', weight: 3 },
+        { at: 'def:rpctab', say: 'the verbs', weight: 1 },
+        { at: 'code:"(*proto->init)(proto, fss)"', say: 'start: the protocol found by name, begun', weight: 3 },
+        { at: 'def:retrpc', say: 'a result: ok, needkey, done, toosmall, phase', weight: 2 },
+        { at: 'def:ctlwrite', say: 'ctl: key and delkey, keys added and removed', weight: 2 },
+      ],
+      links: [
+        { from: 'def:rpcread', to: 'def:retrpc' },
+      ],
+    },
+    'util.c': {
+      summary: "What the protocols share: finding a key by attributes, asking the user for one, the auth server's dial, capabilities.",
+      digest: '952a8b8105d8',
+      capitals: [
+        { at: 'def:findkey', say: 'a key matching the attributes, or needkey' },
+      ],
+      important: [
+        { at: 'def:_authdial', say: 'the auth server, in the default network', weight: 2 },
+        { at: 'def:askuser', say: 'a key typed by the user, when none matches', weight: 1 },
+        { at: 'def:canusekey', say: 'confirm=yes: the user asked first', weight: 2 },
+        { at: 'def:findp9authkey', say: 'the key for the auth server of a domain', weight: 1 },
+        { at: 'def:mkcap', say: 'a capability for #¤: become another user', weight: 2 },
+        { at: 'def:getnvramkey', say: "the host owner's key from nvram", weight: 1 },
+        { at: 'def:failure', say: 'a protocol error, recorded', weight: 1 },
+      ],
+    },
+    'p9sk1.c': {
+      summary: "p9sk1, Plan 9's shared-key protocol: challenges, a ticket from the auth server, authenticators (DES).",
+      digest: '4ff72ea79a71',
+      capitals: [
+        { at: 'def:p9sk1', say: "Plan 9's own protocol, the one 9P uses" },
+      ],
+      important: [
+        { at: 'comment:"Client protocol:"', say: 'the messages, in order, each side', weight: 3 },
+        { at: 'def:p9skwrite', say: 'the phases: challenge, ticket request, ticket, authenticator', weight: 3 },
+        { at: 'code:"if(gettickets(s, trbuf, tbuf) < 0)"', say: 'the client gets both tickets from the auth server', weight: 2 },
+        { at: 'def:getastickets', say: 'the auth server dialed, the ticket request sent', weight: 2 },
+        { at: 'def:mkserverticket', say: 'no auth server: tickets forged with our own key', weight: 1 },
+        { at: 'def:p9skaddkey', say: 'a key: its password turned into a DES key', weight: 1 },
+      ],
+      related: ['../authsrv.c', '../../../lib_security/libauthsrv/'],
+    },
+    'p9any.c': {
+      summary: 'p9any, the negotiator: the server offers proto@domain pairs, the client picks one, then runs it.',
+      digest: '4fea8918e87a',
+      capitals: [
+        { at: 'def:p9anywrite', say: 'the choice made, the sub-protocol started' },
+      ],
+      important: [
+        { at: 'comment:"p9any - protocol negotiator"', say: 'the negotiation, in two messages', weight: 2 },
+        { at: 'def:negotiable', say: 'only p9sk1 (and p9sk2) negotiable', weight: 1 },
+        { at: 'def:setupfss', say: 'a nested Fsstate for the chosen protocol', weight: 2 },
+        { at: 'def:passret', say: "the sub-protocol's results passed up", weight: 1 },
+      ],
+    },
+    'apop.c': {
+      summary: 'APOP and CRAM-MD5: a challenge answered by an MD5 of it and the secret (mail servers).',
+      digest: '7c198d8dfc26',
+      important: [
+        { at: 'comment:"APOP, CRAM - MD5 challenge/response"', say: 'the messages each side sends', weight: 2 },
+        { at: 'code:"dochal(State *s)"', say: 'the challenge from the auth server', weight: 1 },
+      ],
+    },
+    'chap.c': {
+      summary: 'CHAP and MS-CHAP: challenge and response, verified by the auth server (PPP, Windows).',
+      digest: '37df23c74a3f',
+      important: [
+        { at: 'comment:"CHAP, MSCHAP"', say: 'the messages each side sends', weight: 2 },
+        { at: 'def:chapwrite', say: 'the response computed: MD5, or NT and LM hashes', weight: 2 },
+      ],
+    },
+    'p9cr.c': {
+      summary: 'p9cr and vnc: textual challenge/response, a SecurID or netkey box, and VNC\'s DES challenge.',
+      digest: 'da82e177bea4',
+      important: [
+        { at: 'comment:"p9cr, vnc - textual challenge/response"', say: 'server side only', weight: 2 },
+        { at: 'def:vncresponse', say: "VNC's challenge encrypted with the password", weight: 1 },
+      ],
+    },
+    'httpdigest.c': {
+      summary: 'HTTP digest authentication (RFC 2617): the client side only.',
+      digest: '65fbd74aec2a',
+      important: [
+        { at: 'def:digest', say: 'MD5 of user:realm:password, then of the request', weight: 2 },
+      ],
+    },
+    'rsa.c': {
+      summary: 'RSA keys: the old SSH challenge, and signing or verifying a hash (PKCS #1).',
+      digest: '037c434721c4',
+      important: [
+        { at: 'comment:"Old ssh client protocol"', say: 'the three uses of an RSA key', weight: 2 },
+        { at: 'def:rsawrite', say: 'a challenge decrypted, or a hash signed', weight: 2 },
+        { at: 'def:mkasn1', say: 'the DigestInfo wrapped round a hash', weight: 1 },
+      ],
+    },
+    'pass.c': {
+      summary: 'pass: no protocol, a password handed back to the program asking (discouraged).',
+      digest: 'bf84cfc8135a',
+    },
+    'wep.c': {
+      summary: 'wep: a wireless key written into the device the caller names; everything in init.',
+      digest: 'cfb797205a7d',
+    },
+    'confirm.c': {
+      summary: 'The confirm and needkey files: requests queued for a GUI (fgui) to answer, the RPC waiting.',
+      digest: 'b6dcb4db7943',
+      important: [
+        { at: 'def:confirmqueue', say: 'a key use held until the user confirms', weight: 2 },
+        { at: 'def:needkeyqueue', say: 'a missing key asked for, the RPC blocked', weight: 2 },
+      ],
+    },
+    'log.c': {
+      summary: 'The log file: a ring of messages, read by whoever opens /mnt/factotum/log.',
+      digest: 'cc7628441dbc',
+    },
+    'fgui.c': {
+      summary: "factotum's graphical helper: answers confirm and needkey requests in a window (libcontrol).",
+      digest: '148b0873955d',
+      important: [
+        { at: 'def:threadmain', say: 'opens confirm and needkey, waits for requests', weight: 2 },
+        { at: 'code:"readreq(void *a)"', say: 'a request read and sent to the window', weight: 1 },
+        { at: 'def:setupneedkey', say: 'a form: one entry per attribute', weight: 1 },
+      ],
+    },
+    'secstore.c': {
+      summary: 'Just enough of the secstore client to fetch the key file at boot: PAK, then the file.',
+      digest: '378cc4daa340',
+      important: [
+        { at: 'def:secstorefetch', say: 'login, the factotum file fetched, its keys added', weight: 2 },
+        { at: 'def:PAKclient', say: 'the password-authenticated key exchange', weight: 2 },
+      ],
+      related: ['../secstore/secstore.c', '../secstore/pak.c'],
+    },
+  },
+  skeletons: [
+    skeletons.parts('factotum: a file server whose files run protocols', [
+      ['fs.c', 'main, and the 9P server: files to handlers'],
+      ['rpc.c', 'the rpc file: verbs to Proto calls'],
+      ['dat.h', 'Key, Proto, Fsstate: what they share'],
+      ['p9sk1.c', "a protocol (p9sk1): Plan 9's own"],
+      ['p9any.c', 'the negotiator, over p9sk1'],
+      ['util.c', 'keys found, asked for; the auth server dialed'],
+      ['confirm.c', 'the user asked: confirm, needkey'],
+      ['secstore.c', 'the keys fetched at boot'],
+    ], [
+      ['fs.c', 'rpc.c', 'reads and writes of rpc'],
+      ['rpc.c', 'p9any.c', 'Proto functions, by pointer'],
+      ['rpc.c', 'p9sk1.c', 'Proto functions, by pointer'],
+      ['p9any.c', 'p9sk1.c', 'the chosen protocol, nested'],
+      ['p9sk1.c', 'util.c', 'findkey, _authdial'],
+      ['rpc.c', 'confirm.c', 'a request queued'],
+      ['fs.c', 'secstore.c', 'at boot'],
+    ]),
+    skeletons.chain('An authentication through factotum (p9sk1, the client)', [
+      ['../../../lib_security/libauth/auth_proxy.c:def:auth_proxy', 'a program: auth_proxy(fd, "proto=p9any role=client")', ''],
+      ['fs.c:def:fsread', 'writes and reads of /mnt/factotum/rpc', 'rpc messages'],
+      ['rpc.c:def:rpcread', 'start: the Proto by name; read, write: a step', 'an RPC'],
+      ['p9any.c:def:p9anywrite', 'p9any: the server\'s offer, p9sk1 chosen', 'Proto.write (a pointer)'],
+      ['p9sk1.c:def:p9skwrite', 'p9sk1: ticket request, tickets, authenticator', 'nested'],
+      ['p9sk1.c:def:getastickets', 'the auth server asked for the tickets', 'gettickets'],
+      ['../authsrv.c:def:main', "authsrv: the tickets, sealed in each side's key", 'ticket request'],
+    ]),
+    skeletons.cmd('factotum: its main', 'fs.c:def:main', [
+      ['util.c:def:getnvramkey', "the host owner's key from nvram", 'at boot (-S)'],
+      ['secstore.c:def:secstorefetch', 'the other keys from secstore', 'a password'],
+      ['fs.c:def:fs', 'the Srv: attach, walk, read, write', 'postmountsrv'],
+      ['fs.c:def:fswrite', 'rpc and ctl written', 'a 9P Twrite'],
+      ['rpc.c:def:ctlwrite', 'key proto=... added to the ring', 'ctl'],
+    ]),
+    {
+      name: 'rpc.c: the verb set up, then run',
+      bones: [
+        { at: 'rpc.c:def:rpcwrite', role: 'a write: the verb and its argument kept' },
+        { at: 'rpc.c:def:rpcread', role: 'the read: the verb run' },
+        { at: 'util.c:def:findproto', role: 'start: the protocol by name' },
+        { at: 'rpc.c:def:retrpc', role: "the Proto's result to text" },
+        { at: 'confirm.c:def:needkeyqueue', role: 'needkey: the user asked, the read waits' },
+      ],
+      joints: [
+        { from: 'rpc.c:def:rpcwrite', to: 'rpc.c:def:rpcread', say: 'the pending RPC' },
+        { from: 'rpc.c:def:rpcread', to: 'util.c:def:findproto', say: 'proto=' },
+        { from: 'rpc.c:def:rpcread', to: 'rpc.c:def:retrpc', say: 'RpcOk, RpcNeedkey...' },
+        { from: 'rpc.c:def:retrpc', to: 'confirm.c:def:needkeyqueue', say: 'no key' },
+      ],
+    },
+    {
+      name: 'util.c: a key found, or asked for',
+      bones: [
+        { at: 'util.c:def:findkey', role: 'the ring searched by attributes' },
+        { at: 'util.c:def:matchattr', role: 'a key matches a pattern' },
+        { at: 'util.c:def:canusekey', role: 'confirm=yes: asked first' },
+        { at: 'util.c:def:findp9authkey', role: "the auth server's domain key" },
+        { at: 'util.c:def:_authdial', role: 'the auth server dialed' },
+      ],
+      joints: [
+        { from: 'util.c:def:findkey', to: 'util.c:def:matchattr', say: 'each key' },
+        { from: 'util.c:def:findkey', to: 'util.c:def:canusekey', say: 'a match' },
+        { from: 'util.c:def:findp9authkey', to: 'util.c:def:findkey', say: 'proto=p9sk1' },
+      ],
+    },
+    proto('p9sk1.c', 'p9sk1', 'p9sk1: challenge, tickets, authenticators', 'def:p9skinit', 'def:p9skwrite', 'def:p9skread', [
+      { from: 'p9sk1.c:def:p9skwrite', to: 'p9sk1.c:def:getastickets', say: 'the tickets asked for' },
+    ]) + { bones+: [{ at: 'p9sk1.c:def:getastickets', role: 'the auth server: both tickets' }] },
+    proto('p9any.c', 'p9any', 'p9any: a protocol negotiated, then nested', 'def:p9anyinit', 'def:p9anywrite', 'def:p9anyread', [
+      { from: 'p9any.c:def:p9anywrite', to: 'p9any.c:def:setupfss', say: 'the chosen protocol' },
+    ]) + { bones+: [{ at: 'p9any.c:def:setupfss', role: 'an Fsstate for the sub-protocol' }] },
+    proto('apop.c', 'apop', 'apop: an MD5 challenge and response', 'def:apopinit', 'def:apopwrite', 'def:apopread', []),
+    proto('chap.c', 'chap', 'chap: challenge and response, PPP and Windows', 'def:chapinit', 'def:chapwrite', 'def:chapread', []),
+    proto('p9cr.c', 'p9cr', 'p9cr: a textual challenge and response', 'def:p9crinit', 'def:p9crwrite', 'def:p9crread', []),
+    proto('httpdigest.c', 'httpdigest', 'httpdigest: an HTTP digest computed', 'def:hdinit', 'def:hdwrite', 'def:hdread', []),
+    proto('rsa.c', 'rsa', 'rsa: a challenge, a signature', 'def:rsainit', 'def:rsawrite', 'def:rsaread', []),
+    {
+      name: 'confirm.c: two queues of requests for the user',
+      bones: [
+        { at: 'confirm.c:def:confirmqueue', role: 'a key use to confirm' },
+        { at: 'confirm.c:def:confirmread', role: 'the GUI reads the request' },
+        { at: 'confirm.c:def:confirmwrite', role: 'the answer: the key used or not' },
+        { at: 'confirm.c:def:needkeyqueue', role: 'a key to give' },
+        { at: 'confirm.c:def:needkeywrite', role: 'answered: the RPC retried' },
+      ],
+      joints: [
+        { from: 'confirm.c:def:confirmqueue', to: 'confirm.c:def:confirmread', say: 'the request' },
+        { from: 'confirm.c:def:confirmread', to: 'confirm.c:def:confirmwrite', say: "the user's answer" },
+        { from: 'confirm.c:def:needkeyqueue', to: 'confirm.c:def:needkeywrite', say: 'the key added' },
+      ],
+    },
+    skeletons.cmd('fgui: the window answering factotum', 'fgui.c:def:threadmain', [
+      ['fgui.c:code:"readreq(void *a)"', 'a request read from confirm or needkey', 'a thread'],
+      ['fgui.c:def:confirm', 'a confirm: remember, accept, refuse', 'a Request'],
+      ['fgui.c:def:needkey', 'a needkey: a form of attributes', 'a Request'],
+    ], main_role='threadmain: confirm and needkey opened, the window set up'),
+    {
+      name: 'secstore.c: the key file fetched at boot',
+      bones: [
+        { at: 'secstore.c:def:secstorefetch', role: 'dial, log in, fetch, add the keys' },
+        { at: 'secstore.c:def:PAKclient', role: 'PAK: the password proved, a key agreed' },
+        { at: 'secstore.c:code:"newSConn(int fd)"', role: 'an encrypted connection' },
+        { at: 'secstore.c:def:getfile', role: 'the file factotum read and decrypted' },
+        { at: 'rpc.c:def:ctlwrite', role: 'each line a key' },
+      ],
+      joints: [
+        { from: 'secstore.c:def:secstorefetch', to: 'secstore.c:def:PAKclient', say: 'the password' },
+        { from: 'secstore.c:def:PAKclient', to: 'secstore.c:code:"newSConn(int fd)"', say: 'the session key' },
+        { from: 'secstore.c:def:secstorefetch', to: 'secstore.c:def:getfile', say: 'the connection' },
+        { from: 'secstore.c:def:getfile', to: 'rpc.c:def:ctlwrite', say: 'key lines' },
+      ],
+    },
+  ],
+}

@@ -1,0 +1,180 @@
+// kernel/buses/arm/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The Raspberry Pi's buses: USB (the only way to a keyboard and mouse there), the mini UART, DMA.",
+  files: {
+    'devusb.c': {
+      digest: '751d0d03eb69',
+      summary: '#u: USB as files, an epN.M directory per endpoint; usbd, in user space, enumerates through them.',
+      capitals: [
+        { at: 'def:usbdevtab', say: "#u: the USB device's table" },
+        { at: 'def:epctl', say: "an endpoint configured by text: 'new', 'maxpkt'..." },
+      ],
+      important: [
+        { at: 'comment:"The interface provided is a violation of the standard"', say: 'endpoints, not devices: the bus left to usbd', weight: 3 },
+        { at: 'def:hciprobe', say: 'a controller found: its type registered by addhcitype', weight: 2 },
+        { at: 'def:newdev', say: "a device: its control endpoint epN.0", weight: 2 },
+        { at: 'def:newdevep', say: 'another endpoint of a device, made on demand', weight: 1 },
+        { at: 'def:usbopen', say: "an endpoint opened: the controller's epopen", weight: 1 },
+        { at: 'def:usbread', say: "data read: the controller's epread", weight: 2 },
+        { at: 'def:usbwrite', say: "ctl files or data: the controller's epwrite", weight: 2 },
+        { at: 'def:getep', say: 'endpoints counted by reference', weight: 1 },
+      ],
+      links: [
+        { from: 'def:usbwrite', to: 'def:ctlwrite' },
+        { from: 'def:ctlwrite', to: 'def:epctl' },
+        { from: 'def:epctl', to: 'def:newdevep' },
+      ],
+      related: ['../usb.h', 'usbdwc.c', '../user/usb/usbd/usbd.c'],
+    },
+    'usbdwc.c': {
+      digest: 'b43687c55ab3',
+      summary: "The Pi's USB host controller (Synopsys DesignWare OTG): transfers on its 16 host channels, driven by the FIQ.",
+      capitals: [
+        { at: 'def:chanio', say: 'a transfer: a channel set up and waited on' },
+      ],
+      important: [
+        { at: 'def:reset', say: "the Hci filled with this driver's functions", weight: 3 },
+        { at: 'def:usbdwclink', say: 'registered as "dwcotg" at boot', weight: 1 },
+        { at: 'def:chanalloc', say: 'a free host channel of 16', weight: 1 },
+        { at: 'def:chansetup', say: 'the endpoint: address, type, packet size', weight: 1 },
+        { at: 'def:sofwait', say: 'split and periodic transfers wait for a frame', weight: 1 },
+        { at: 'def:chanwait', say: 'sleep until the channel interrupt', weight: 2 },
+        { at: 'def:fiqintr', say: 'the FIQ: channel interrupts at the fastest level', weight: 3 },
+        { at: 'def:ctltrans', say: 'a control transfer: setup, data, status', weight: 2 },
+        { at: 'def:eptrans', say: 'bulk and interrupt data, packet by packet', weight: 1 },
+      ],
+      links: [
+        { from: 'def:epread', to: 'def:eptrans' },
+        { from: 'def:epwrite', to: 'def:ctltrans' },
+        { from: 'def:eptrans', to: 'def:chanio' },
+        { from: 'def:chanio', to: 'def:chanwait' },
+      ],
+      related: ['dwcotg.h', 'devusb.c'],
+    },
+    'dwcotg.h': {
+      digest: '568e169e50aa',
+      summary: "The DesignWare OTG controller's registers: the global ones and a Hostchan per channel.",
+      important: [
+        { at: 'type:Dwcregs', say: 'the core registers, mapped at USBREGS', weight: 2 },
+        { at: 'type:Hostchan', say: 'a host channel: characteristics, split, transfer size', weight: 2 },
+      ],
+    },
+    'dma.c': {
+      digest: 'c3798ce55bb2',
+      summary: "The BCM2835 DMA controller: control blocks chained, used by the SD card's driver.",
+      important: [
+        { at: 'comment:"Experiments show that only channels 2-5,11-12 work with mmc"', say: 'the hardware, learned by trying', weight: 1 },
+        { at: 'type:Cb', say: "a control block: the DMA's program, in memory", weight: 2 },
+        { at: 'def:dmaaddr', say: 'a kernel address as the GPU bus sees it', weight: 2 },
+        { at: 'def:dmastart', say: 'a transfer started on a channel', weight: 3 },
+        { at: 'def:dmawait', say: 'sleep until its interrupt', weight: 2 },
+      ],
+    },
+    'uartmini.c': {
+      digest: '8a487869c7ad',
+      summary: "The Pi's mini UART (UART1) as a PhysUart, its GPIO pins set; the serial console at boot.",
+      capitals: [
+        { at: 'def:uartconsinit', say: 'the serial console, from main' },
+      ],
+      important: [
+        { at: 'comment:"global [[miniphysuart]]"', say: "the chip's operations, for devuart", weight: 3 },
+        { at: 'def:gpiosel', say: 'a GPIO pin given its function (ALT5: the UART)', weight: 2 },
+        { at: 'def:enable', say: 'pins, then the chip, then its interrupt', weight: 1 },
+        { at: 'def:interrupt', say: 'bytes received to uartrecv, the transmitter kicked', weight: 2 },
+        { at: 'def:putc', say: 'polled output: busy-wait on the register', weight: 1 },
+        { at: 'def:okay', say: 'the green OK LED, used as a sign by emmc', weight: 1 },
+      ],
+      related: ['../devuart.c'],
+    },
+  },
+  skeletons: [
+    {
+      name: "The Pi's buses: USB to user space, a UART, DMA",
+      bones: [
+        { at: 'devusb.c', role: '#u: endpoints as files, for usbd' },
+        { at: '../usb.h', role: 'Hci: what a controller driver provides' },
+        { at: 'usbdwc.c', role: 'the controller: transfers on channels' },
+        { at: 'dwcotg.h', role: "the controller's registers" },
+        { at: 'uartmini.c', role: 'the serial line, a PhysUart' },
+        { at: '../devuart.c', role: '#t, above the chip' },
+        { at: 'dma.c', role: 'DMA, for the SD card' },
+      ],
+      joints: [
+        { from: 'devusb.c', to: '../usb.h', say: 'hp->epread, hp->epwrite...' },
+        { from: 'usbdwc.c', to: '../usb.h', say: 'fills the Hci (reset)' },
+        { from: 'usbdwc.c', to: 'dwcotg.h', say: 'register accesses' },
+        { from: '../devuart.c', to: 'uartmini.c', say: 'phys->kick, enable...' },
+        { from: 'uartmini.c', to: '../devuart.c', say: 'uartrecv: a byte in' },
+      ],
+    },
+    {
+      name: '#u: an endpoint file read, down to the controller',
+      bones: [
+        { at: 'devusb.c:def:usbdevtab', role: '#u, reached through devtab' },
+        { at: 'devusb.c:def:usbread', role: 'a data file read' },
+        { at: 'devusb.c:def:usbwrite', role: 'a data or ctl file written' },
+        { at: 'devusb.c:def:epctl', role: "an endpoint's ctl commands" },
+        { at: 'devusb.c:def:newdevep', role: 'an endpoint made' },
+        { at: 'devusb.c:def:hciprobe', role: 'the controllers found at boot' },
+      ],
+      joints: [
+        { from: 'devusb.c:def:usbdevtab', to: 'devusb.c:def:usbread', say: 'read (a devtab pointer)' },
+        { from: 'devusb.c:def:usbdevtab', to: 'devusb.c:def:usbwrite', say: 'write (a devtab pointer)' },
+        { from: 'devusb.c:def:usbwrite', to: 'devusb.c:def:epctl', say: 'text to a ctl file' },
+        { from: 'devusb.c:def:epctl', to: 'devusb.c:def:newdevep', say: "'new' endpoint" },
+        { from: 'devusb.c:def:usbdevtab', to: 'devusb.c:def:hciprobe', say: 'reset: each controller type tried' },
+      ],
+    },
+    {
+      name: 'A USB transfer on the DWC controller',
+      bones: [
+        { at: 'usbdwc.c:def:reset', role: 'the Hci filled: the entry points' },
+        { at: 'usbdwc.c:def:epread', role: "devusb's read on an endpoint" },
+        { at: 'usbdwc.c:def:eptrans', role: 'data split into packets' },
+        { at: 'usbdwc.c:def:chanio', role: 'one transfer on a channel' },
+        { at: 'usbdwc.c:def:chanwait', role: 'asleep until done' },
+        { at: 'usbdwc.c:def:fiqintr', role: 'the FIQ: the channel done' },
+      ],
+      joints: [
+        { from: 'usbdwc.c:def:reset', to: 'usbdwc.c:def:epread', say: 'hp->epread (a pointer)' },
+        { from: 'usbdwc.c:def:epread', to: 'usbdwc.c:def:eptrans', say: 'bytes wanted' },
+        { from: 'usbdwc.c:def:eptrans', to: 'usbdwc.c:def:chanio', say: 'a packet' },
+        { from: 'usbdwc.c:def:chanio', to: 'usbdwc.c:def:chanwait', say: 'started' },
+        { from: 'usbdwc.c:def:fiqintr', to: 'usbdwc.c:def:chanwait', say: 'wakeup' },
+      ],
+    },
+    {
+      name: 'The mini UART: pins, chip, interrupt',
+      bones: [
+        { at: 'uartmini.c:def:uartconsinit', role: 'the console, at boot' },
+        { at: 'uartmini.c:comment:"global [[miniphysuart]]"', role: "the chip's operations" },
+        { at: 'uartmini.c:def:enable', role: 'pins, chip, interrupt' },
+        { at: 'uartmini.c:def:gpiosel', role: 'the pins given to the UART' },
+        { at: 'uartmini.c:def:interrupt', role: 'bytes in, output kicked' },
+      ],
+      joints: [
+        { from: 'uartmini.c:def:uartconsinit', to: 'uartmini.c:comment:"global [[miniphysuart]]"', say: 'consuart' },
+        { from: 'uartmini.c:comment:"global [[miniphysuart]]"', to: 'uartmini.c:def:enable', say: '.enable' },
+        { from: 'uartmini.c:def:enable', to: 'uartmini.c:def:gpiosel', say: 'TxPin, RxPin: ALT5' },
+        { from: 'uartmini.c:def:enable', to: 'uartmini.c:def:interrupt', say: 'IRQaux enabled' },
+      ],
+    },
+    {
+      name: 'A DMA transfer',
+      bones: [
+        { at: 'dma.c:def:dmastart', role: 'a transfer: a control block written' },
+        { at: 'dma.c:type:Cb', role: 'the control block' },
+        { at: 'dma.c:def:dmaaddr', role: 'addresses as the bus sees them' },
+        { at: 'dma.c:def:dmainterrupt', role: 'the end of the transfer' },
+        { at: 'dma.c:def:dmawait', role: 'the caller waits' },
+      ],
+      joints: [
+        { from: 'dma.c:def:dmastart', to: 'dma.c:type:Cb', say: 'source, destination, length' },
+        { from: 'dma.c:def:dmastart', to: 'dma.c:def:dmaaddr', say: 'converted' },
+        { from: 'dma.c:def:dmainterrupt', to: 'dma.c:def:dmawait', say: 'wakeup' },
+      ],
+    },
+  ],
+}

@@ -1,0 +1,192 @@
+// lib_core/libbio/: what the code map says of it (tinybox codemap; its
+// manual: ~/github/ocaml-elm-playground/docs/manual/codemap.md). The
+// book: Libcore.nw's "Buffered I/O" chapter; the interface is
+// include/io/bio.h (Biobuf, Biobufhdr), described with include/.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libbio, buffered I/O: a Biobuf over a file descriptor, read by char, rune or line, written by Bprint (stdio's FILE, Plan 9's way).",
+  files: {
+    'binit.c': {
+      summary: 'A Biobuf made: Binit over an fd, Bopen over a file name, Bterm to flush and close; write buffers flushed at exit.',
+      digest: 'c956d0a2a7de',
+      capitals: [
+        { at: 'def:Binit', say: 'a Biobuf over an open fd (stdin, stdout)' },
+        { at: 'def:Bopen', say: 'a Biobuf over a file, malloced' },
+        { at: 'def:Bterm', say: 'flush, close, free' },
+      ],
+      important: [
+        { at: 'def:Binits', say: 'the buffer set up: room kept before it for Bungetc', weight: 3 },
+        { at: 'code:"bp->ocount = -size"', say: 'the count runs from -size up to 0: a full buffer', weight: 2 },
+        { at: 'def:install', say: 'each write buffer remembered, for batexit', weight: 1 },
+        { at: 'def:batexit', say: 'at exit, every write buffer flushed: no lost output', weight: 2 },
+        { at: 'code:"bp->flag = Bmagic"', say: 'Bopen\'s mark: Bterm frees only what Bopen malloced', weight: 1 },
+      ],
+      links: [{ from: 'def:Bopen', to: 'def:Binits' }, { from: 'def:Binits', to: 'def:install' }],
+    },
+    'bgetc.c': {
+      summary: 'Bgetc, a byte read from the buffer, refilled by read() when empty; Bungetc steps back one.',
+      digest: '8a5ce265ac1e',
+      capitals: [{ at: 'def:Bgetc', say: 'the next byte, the buffer refilled when empty' }],
+      important: [
+        { at: 'code:"bp->icount = i+1"', say: 'the negative count indexes back from ebuf: one add, one test', weight: 3 },
+        { at: 'comment:"get next buffer, try to keep Bungetsize"', say: 'the last bytes kept before the new buffer, for ungets', weight: 2 },
+        { at: 'code:"i = read(bp->fid, bp->bbuf, bp->bsize)"', say: 'the only system call: a whole buffer at a time', weight: 2 },
+        { at: 'code:"memmove(bp->ebuf-i-Bungetsize"', say: 'a short read slid to the end: data always ends at ebuf', weight: 1 },
+      ],
+    },
+    'bgetrune.c': {
+      summary: 'Bgetrune: a UTF-8 rune from the buffer, its bytes joined by chartorune; Bungetrune steps back its size.',
+      digest: '5aad63be6ebe',
+      capitals: [{ at: 'def:Bgetrune', say: 'the next rune (UTF-8 decoded)' }],
+      important: [
+        { at: 'comment:"utf is long enough to be a rune"', say: 'fast path: the bytes already in the buffer', weight: 2 },
+        { at: 'def:Bungetrune', weight: 1 },
+      ],
+    },
+    'bgetd.c': {
+      summary: 'Bgetd: a floating-point number read from the buffer, through charstod and a character callback.',
+      digest: 'a3837df22b9d',
+      important: [{ at: 'def:Bgetdf', say: "charstod's source of characters: Bgetc", weight: 1 }],
+    },
+    'brdline.c': {
+      summary: 'Brdline: a line read in place, a pointer into the buffer (not a copy); Blinelen its length.',
+      digest: '2d5d88d4ce8b',
+      capitals: [{ at: 'def:Brdline', say: 'a line, returned inside the buffer' }],
+      important: [
+        { at: 'comment:"first try in remainder of buffer"', say: 'most lines found by one memchr', weight: 2 },
+        { at: 'comment:"copy data to beginning of buffer"', say: 'the partial line moved down to grow it', weight: 1 },
+        { at: 'comment:"full buffer without finding"', say: 'a line longer than the buffer: 0, and Blinelen says', weight: 2 },
+      ],
+    },
+    'brdstr.c': {
+      summary: 'Brdstr: a line of any length, a malloced copy, grown by badd (Brdline without its limit).',
+      digest: 'c45d959ae60f',
+      important: [
+        { at: 'def:Brdstr', say: 'Brdline\'s loop, but copying out', weight: 2 },
+        { at: 'def:badd', say: 'the string grown by realloc', weight: 1 },
+      ],
+    },
+    'bread.c': {
+      summary: 'Bread: n bytes copied out of the buffer, refilled as needed (fread).',
+      digest: '05b8587b5150',
+      important: [{ at: 'def:Bread', weight: 1 }],
+    },
+    'bputc.c': {
+      summary: 'Bputc: a byte into the write buffer, flushed when full.',
+      digest: '856070a7b79c',
+      capitals: [{ at: 'def:Bputc', say: 'a byte written, buffered' }],
+    },
+    'bputrune.c': {
+      summary: 'Bputrune: a rune written as its UTF-8 bytes (one Bputc for ASCII).',
+      digest: '501eae382632',
+    },
+    'bwrite.c': {
+      summary: 'Bwrite: n bytes into the write buffer; a flush each time it fills.',
+      digest: '2a50c41dd205',
+      important: [{ at: 'def:Bwrite', weight: 1 }],
+    },
+    'bprint.c': {
+      summary: "Bprint: print's formats into a Biobuf, the variadic front of Bvprint.",
+      digest: '27dfd1be21d9',
+      capitals: [{ at: 'def:Bprint', say: 'formatted output, buffered: the most called' }],
+    },
+    'bvprint.c': {
+      summary: "Bvprint: the Biobuf's own buffer made a Fmt's, so dofmt formats straight into it (no copy).",
+      digest: '2fc3b1497821',
+      important: [
+        { at: 'def:Bvprint', say: 'a Fmt pointing into the Biobuf', weight: 3 },
+        { at: 'def:fmtBflush', say: 'when the Fmt is full: Bflush, and go on', weight: 2 },
+        { at: 'code:"n = dofmt(&f, fmt)"', say: "libc's formatting engine does the work", weight: 1 },
+      ],
+      links: [{ from: 'def:Bvprint', to: '../libc/fmt/dofmt.c:def:dofmt' }],
+    },
+    'bflush.c': {
+      summary: 'Bflush: the write buffer written out by one write(); on a read buffer, the input discarded.',
+      digest: '3626760f323a',
+      capitals: [{ at: 'def:Bflush', say: 'the buffer written: the one write()' }],
+      important: [
+        { at: 'code:"c = write(bp->fid, bp->bbuf, n)"', say: 'the system call every Bprint ends in', weight: 2 },
+      ],
+    },
+    'bseek.c': {
+      summary: 'Bseek: a seek, within the buffer when the target is there, else a real seek and the buffer dropped.',
+      digest: '1e2ae2a6ea0f',
+      important: [{ at: 'comment:"try to seek within buffer"', say: 'no system call when it can be avoided', weight: 2 }],
+    },
+    'boffset.c': {
+      summary: "Boffset: the program's position, the file's offset corrected by what is buffered.",
+      digest: 'cb56e724b60f',
+    },
+    'bbuffered.c': {
+      summary: 'Bbuffered: how many bytes are waiting in the buffer (telnet checks before blocking).',
+      digest: '5c2777d614d4',
+    },
+    'bfildes.c': {
+      summary: "Bfildes: the Biobuf's file descriptor, for the calls libbio does not wrap.",
+      digest: '297c5e456755',
+    },
+    'btestprint.c': {
+      summary: 'A test: a line of n "a"s printed by Bprint to stdout, to try long formatted output.',
+      digest: 'e1f2d14d2074',
+    },
+  },
+  skeletons: [
+    {
+      name: 'A Biobuf: made, read, written, flushed',
+      bones: [
+        { at: 'binit.c', role: 'made over an fd (Binit) or a file (Bopen)' },
+        { at: 'bgetc.c', role: 'reading: bytes, refilled by read()' },
+        { at: 'brdline.c', role: 'reading: lines, in place' },
+        { at: 'bgetrune.c', role: 'reading: runes, on Bgetc' },
+        { at: 'bprint.c', role: 'writing: formatted, through Bvprint' },
+        { at: 'bvprint.c', role: "print's engine aimed at the buffer" },
+        { at: 'bflush.c', role: 'the buffer out: one write()' },
+      ],
+      joints: [
+        { from: 'binit.c', to: 'bgetc.c', say: 'a buffer to read' },
+        { from: 'bgetc.c', to: 'bgetrune.c', say: 'bytes' },
+        { from: 'binit.c', to: 'brdline.c', say: 'a buffer to read' },
+        { from: 'binit.c', to: 'bprint.c', say: 'a buffer to write' },
+        { from: 'bprint.c', to: 'bvprint.c', say: 'the va_list' },
+        { from: 'bvprint.c', to: 'bflush.c', say: 'a full buffer' },
+        { from: 'binit.c', to: 'bflush.c', say: 'Bterm, and at exit' },
+      ],
+    },
+    {
+      name: 'binit.c: a Biobuf opened, and flushed at exit',
+      bones: [
+        { at: 'binit.c:def:Bopen', role: 'a file opened, a Biobuf malloced' },
+        { at: 'binit.c:def:Binit', role: 'a Biobuf over an fd already open' },
+        { at: 'binit.c:def:Binits', role: 'the buffer laid out, by mode' },
+        { at: 'binit.c:def:install', role: 'a write buffer registered' },
+        { at: 'binit.c:def:batexit', role: 'at exit: every registered buffer flushed' },
+        { at: 'binit.c:def:Bterm', role: 'flushed, deregistered, closed' },
+      ],
+      joints: [
+        { from: 'binit.c:def:Bopen', to: 'binit.c:def:Binits', say: 'the fd' },
+        { from: 'binit.c:def:Binit', to: 'binit.c:def:Binits', say: 'the fd' },
+        { from: 'binit.c:def:Binits', to: 'binit.c:def:install', say: 'OWRITE' },
+        { from: 'binit.c:def:install', to: 'binit.c:def:batexit', say: 'atexit, once' },
+        { from: 'binit.c:def:Bterm', to: 'binit.c:def:install', say: 'deinstall' },
+      ],
+    },
+    skeletons.chain('Bgetc: a byte, and the refill', [
+      ['binit.c:def:Binits', 'the buffer laid out, icount 0', ''],
+      ['bgetc.c:def:Bgetc', 'icount negative: a byte; zero: refill', 'first read'],
+      ['../libc/9sys/read.c:def:read', 'a whole buffer read at once', 'empty'],
+    ]),
+    skeletons.chain('Bprint: formats straight into the buffer', [
+      ['bprint.c:def:Bprint', 'the variadic front', ''],
+      ['bvprint.c:def:Bvprint', 'a Fmt over the free part of the buffer', 'va_list'],
+      ['../libc/fmt/dofmt.c:def:dofmt', "libc's formatter: runs the verbs", 'the Fmt'],
+      ['bvprint.c:def:fmtBflush', 'the Fmt full: the buffer flushed', 'full'],
+      ['bflush.c:def:Bflush', 'one write()', 'flush'],
+    ]),
+    skeletons.cmd('btestprint: n bytes through Bprint', 'btestprint.c:def:main', [
+      ['binit.c:def:Binit', 'stdout buffered', 'fd 1'],
+      ['bprint.c:def:Bprint', 'the long line formatted', 'the string'],
+      ['bflush.c:def:Bflush', 'written', 'flush'],
+    ], main_role='main: n from argv[1], a string of n a'),
+  ],
+}

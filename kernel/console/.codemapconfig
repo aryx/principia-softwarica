@@ -1,0 +1,79 @@
+// kernel/console/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, 12).
+// The book: Kernel.nw's Devices chapter, "The console device /dev/cons".
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The console, #c: keys typed become /dev/cons's lines; the kernel's print goes to the screen, kmesg, serial.",
+  files: {
+    'devcons.c': {
+      summary: '/dev/cons and friends: the keyboard queue, line editing on read, print, panic, kmesg, /dev/time.',
+      digest: '2525472b07ce',
+      capitals: [
+        { at: 'def:kbdputc', say: 'a key from the interrupt: into a staging ring' },
+        { at: 'def:consread', say: '/dev/cons read: raw, or a cooked line' },
+        { at: 'def:putstrn', say: "the kernel's print: screen, kmesg, serial" },
+      ],
+      important: [
+        { at: 'def:kbd', say: 'the console state: staging ring, line, raw', weight: 2 },
+        { at: 'comment:"we save up input characters till clock time"', say: 'one qproduce per tick, not per key', weight: 2 },
+        { at: 'def:echo', say: '^T^T debug keys, then the key queued and echoed', weight: 3 },
+        { at: 'code:"qproduce(kbdq, buf, n)"', say: 'into kbdq: what a /dev/cons read waits on', weight: 3 },
+        { at: 'code:"while(!qcanread(lineq))"', say: 'cooking: erase, ^U, ^D, a line into lineq', weight: 3 },
+        { at: 'code:"else if(screenputs != nil)"', say: 'the screen, if there is one', weight: 2 },
+        { at: 'comment:"Log console output so it can be retrieved"', say: '/dev/kmesg: boot messages kept', weight: 1 },
+        { at: 'def:devcons_panic', say: 'panic: print, dump, halt', weight: 1 },
+        { at: 'def:conswrite', say: '/dev/cons written: copied, then putstrn', weight: 2 },
+        { at: 'def:consdevtab', say: "#c's methods, in devtab", weight: 1 },
+      ],
+      links: [
+        { from: 'def:kbdputcclock', to: 'def:echo' },
+        { from: 'def:conswrite', to: 'def:putstrn' },
+        { from: 'def:putstrn', to: 'def:putstrn0' },
+      ],
+      related: ['../devices/keyboard/portkbd.c', '../files/qio.c', '../devices/screen/'],
+    },
+    'portdat_console.h': {
+      summary: "The console's queues: keys in (kbdq), the kernel's print out (kprintoq, serialoq).",
+      digest: 'caf4a9e9e778',
+      important: [{ at: 'def:kbdq', say: 'raw keys, read by /dev/cons', weight: 2 }],
+    },
+    'portfns_console.h': {
+      summary: "The console's functions, declared; screenputs a hook the screen driver fills.",
+      digest: 'f54a37302c53',
+      important: [{ at: 'def:screenputs', say: 'a pointer: set by the screen driver, or nil', weight: 2 }],
+    },
+    'print.c': {
+      summary: "libc's fmt lock overridden for the kernel: a spin lock, and no floating point.",
+      digest: '79fec5167c63',
+    },
+    'rdb.c': {
+      summary: 'A remote debugger on the serial line: peek and poke memory, entered by ^T^TD.',
+      digest: '590118ab7649',
+      important: [{ at: 'def:talkrdb', say: 'the command loop, over the uart', weight: 1 }],
+    },
+  },
+  skeletons: [
+    skeletons.parts('The console: keys in, text out', [
+      ['devcons.c', '#c: /dev/cons, the queues, print'],
+      ['portdat_console.h', 'the queues: kbdq, kprintoq, serialoq'],
+      ['rdb.c', 'the serial debugger'],
+      ['print.c', "the kernel's fmt lock"],
+      ['../devices/keyboard/', 'the keyboard driver: scan codes to runes'],
+      ['../devices/screen/', 'the screen: screenputs'],
+    ], [
+      ['../devices/keyboard/', 'devcons.c', 'kbdputc'],
+      ['devcons.c', 'portdat_console.h', 'queued'],
+      ['devcons.c', '../devices/screen/', 'screenputs, the echo'],
+      ['devcons.c', 'rdb.c', '^T^TD'],
+    ]),
+    skeletons.chain('devcons.c: a key typed, read from /dev/cons', [
+      ['devcons.c:def:kbdputc', 'at interrupt: the rune in a ring', ''],
+      ['devcons.c:def:kbdputcclock', 'at the clock tick: the ring drained', 'staged'],
+      ['devcons.c:def:echo', 'debug keys; queued; echoed', 'the keys'],
+      ['devcons.c:def:consread', 'a process reads: the line cooked', 'kbdq'],
+      ['devcons.c:def:conswrite', 'a process writes /dev/cons', 'and answers'],
+      ['devcons.c:def:putstrn', 'screen, kmesg, serial', 'the text'],
+    ]),
+  ],
+}

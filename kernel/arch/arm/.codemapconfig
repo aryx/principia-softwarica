@@ -1,0 +1,88 @@
+// kernel/arch/arm/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// arminstr.ha, the ARM instructions 5a lacks written as WORDs, is no source.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The ARM's own: the PSR and coprocessor bits, CP15 and VFP registers reached, the VideoCore GPU's mailbox.",
+  files: {
+    'arm.h': {
+      summary: 'ARMv6 and v7 definitions for C and assembly: processor modes, CP15 registers, MMU entry bits.',
+      digest: '26be7dfadf4c',
+      capitals: [{ at: 'def:CpSC', say: 'CP15: the system control coprocessor' }],
+      important: [
+        { at: 'def:PsrMusr', say: 'the processor modes: user, svc, irq, abort...', weight: 2 },
+        { at: 'def:PsrDirq', say: 'the IRQ-disable bit: splhi', weight: 2 },
+        { at: 'def:CpCONTROL', say: 'the control register: MMU, caches on', weight: 1 },
+        { at: 'def:Section', say: 'a 1MB level-1 mapping', weight: 1 },
+        { at: 'def:HVECTORS', say: 'the vectors high, at 0xFFFF0000', weight: 1 },
+      ],
+    },
+    'io.h': {
+      summary: "The Pi's interrupt numbers (timers, USB, DMA, MMC...) and the DMA flags.",
+      digest: '1137372daebc',
+      important: [{ at: 'type:IRQ', say: 'IRQclock is the GPU timer 3', weight: 2 }],
+    },
+    'dat_arch.h': {
+      summary: "Soc: what differs between the Pi 1 and 2: RAM size, I/O and bus addresses, page attributes.",
+      digest: '7a98b0b5afac',
+      important: [{ at: 'type:Soc', say: 'filled by raspi1.c or raspi2.c', weight: 2 }],
+    },
+    'coproc.c': {
+      summary: 'Any coprocessor register read or written: the MRC/MCR instruction built in memory, then called.',
+      digest: '6940b92c1741',
+      important: [
+        { at: 'def:setupcpop', say: 'self-modifying code: the register number is in the instruction', weight: 3 },
+        { at: 'def:cprdsc', say: 'CP15 read', weight: 1 },
+        { at: 'def:fprd', say: 'a VFP control register read', weight: 1 },
+        { at: 'def:fpsavereg', say: 'a VFP register saved', weight: 1 },
+      ],
+    },
+    'vcore.c': {
+      summary: 'The VideoCore GPU asked through its mailbox: framebuffer, RAM size, clocks, power, MAC address.',
+      digest: '9871827dc68b',
+      capitals: [{ at: 'def:fbinit', say: 'the framebuffer, from the GPU' }],
+      important: [
+        { at: 'def:vcwrite', say: 'a message in the mailbox, channel in the low bits', weight: 2 },
+        { at: 'def:vcreq', say: 'the property interface: a tag, a buffer', weight: 3 },
+        { at: 'def:getramsize', say: 'how much RAM the ARM gets', weight: 1 },
+        { at: 'def:setpower', say: 'USB powered on', weight: 1 },
+      ],
+      links: [{ from: 'def:vcreq', to: 'def:vcwrite' }],
+    },
+  },
+  skeletons: [
+    skeletons.parts("The ARM's helpers", [
+      ['arm.h', 'the bits, for C and assembly'],
+      ['coproc.c', 'coprocessor registers by number'],
+      ['vcore.c', 'the GPU mailbox'],
+      ['io.h', 'the interrupt numbers'],
+      ['dat_arch.h', 'the SoC differences'],
+    ], [
+      ['arm.h', 'coproc.c', 'CpSC, CpFP'],
+      ['dat_arch.h', 'vcore.c', 'bus addresses'],
+    ]),
+    {
+      name: 'A coprocessor register, by number',
+      bones: [
+        { at: 'coproc.c:def:cprdsc', role: 'CP15 read, from C' },
+        { at: 'coproc.c:def:cprd', role: 'any coprocessor' },
+        { at: 'coproc.c:def:setupcpop', role: 'MRC assembled in memory, caches synced' },
+        { at: 'coproc.c:def:fprd', role: 'a VFP control register' },
+        { at: 'coproc.c:def:setupfpctlop', role: 'VMRS assembled the same way' },
+        { at: 'coproc.c:def:fpsavereg', role: 'VFP registers saved at a switch' },
+      ],
+      joints: [
+        { from: 'coproc.c:def:cprdsc', to: 'coproc.c:def:cprd', say: 'cp 15' },
+        { from: 'coproc.c:def:cprd', to: 'coproc.c:def:setupcpop', say: 'the instruction' },
+        { from: 'coproc.c:def:fprd', to: 'coproc.c:def:setupfpctlop', say: 'the instruction' },
+      ],
+    },
+    skeletons.chain('The GPU mailbox', [
+      ['vcore.c:def:getramsize', 'a property: the RAM (and clocks, power...)', ''],
+      ['vcore.c:def:vcreq', 'a tagged request in VCBUFFER', 'a tag'],
+      ['vcore.c:def:vcwrite', 'into the mailbox', 'the buffer'],
+      ['vcore.c:def:vcread', 'the answer, on its channel', 'waits'],
+    ]),
+  ],
+}

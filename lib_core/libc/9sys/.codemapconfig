@@ -1,0 +1,362 @@
+// lib_core/libc/9sys/: what the code map says of it (tinybox codemap;
+// its manual: ~/github/ocaml-elm-playground/docs/manual/codemap.md). The
+// book: Libcore.nw's chapters on files, directories, time, processes,
+// errors, locks, IPC (9P) and networking. The system calls themselves
+// are the assembly stubs of ../9syscall/; here, what libc builds on them.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libc's Plan 9 layer: what is built on the system calls -- read and write, dirstat, fork, time, qlock, sysfatal, 9P's marshalling, dial and announce -- often by reading a file (#c/pid, /dev/bintime, /net).",
+  files: {
+    'read.c': {
+      summary: 'read: pread at offset -1, the current one (read is no system call in Plan 9).',
+      digest: '0495798b0d63',
+      capitals: [{ at: 'def:read', say: 'read(): pread, at the current offset' }],
+    },
+    'write.c': {
+      summary: 'write: pwrite at offset -1, the current one.',
+      digest: 'c8cec98634dd',
+      capitals: [{ at: 'def:write', say: 'write(): pwrite, at the current offset' }],
+    },
+    'readv.c': { summary: 'readv and preadv: a read into one buffer, scattered into the iovecs (for POSIX ports).', digest: 'bc88d196869c' },
+    'writev.c': { summary: 'writev and pwritev: the iovecs gathered into one buffer, one write.', digest: 'd30598aecc9f' },
+    'fork.c': {
+      summary: "fork: rfork(RFPROC|RFFDG|RFREND), Unix's fork as one case of Plan 9's rfork.",
+      digest: 'fdd2baa887a4',
+      capitals: [{ at: 'def:fork', say: 'fork(): a case of rfork' }],
+    },
+    'wait.c': {
+      summary: 'wait: await() read and parsed into a malloced Waitmsg (pid, times, exit string).',
+      digest: 'f8027d9e5bab',
+      capitals: [{ at: 'def:wait', say: "a child's end: a Waitmsg" }],
+    },
+    'waitpid.c': { summary: 'waitpid: wait, keeping only the pid.', digest: '3cecffd04878' },
+    'getpid.c': {
+      summary: 'getpid: no system call, the file #c/pid read (everything is a file).',
+      digest: '30247c1b2808',
+      important: [{ at: 'code:"#c/pid"', say: 'the pid, read from the console device', weight: 2 }],
+    },
+    'getppid.c': { summary: 'getppid: the file /dev/ppid read.', digest: 'fd96c39fb8d5' },
+    'abort.c': {
+      summary: 'abort: a read from address 0, the fault killing the process (a broken process left for acid).',
+      digest: 'e95bd9613e63',
+      important: [{ at: 'code:"while(*(int*)0)"', say: 'dies by a memory fault, on purpose', weight: 2 }],
+    },
+    'sbrk.c': {
+      summary: "sbrk: the heap grown from the end of the bss by the brk system call; malloc's source of memory.",
+      digest: 'ea3c4a8e2b13',
+      capitals: [{ at: 'def:sbrk', say: 'more heap: brk' }],
+      important: [
+        { at: 'def:bloc', say: 'the break: starts at end, set by the linker', weight: 2 },
+        { at: 'code:"if(brk((void*)(bl+n)) < 0)"', say: 'the system call', weight: 1 },
+      ],
+    },
+    'sysfatal.c': {
+      summary: 'sysfatal: print the message, exits with it; through a pointer libthread replaces.',
+      digest: '0f71daf1e7b0',
+      capitals: [{ at: 'def:sysfatal', say: 'print and die: the usual error exit' }],
+      important: [{ at: 'def:_sysfatal', say: "the hook: libthread's threadsysfatal", weight: 2 }],
+    },
+    'werrstr.c': {
+      summary: "werrstr: the process's error string set, printed later by %r.",
+      digest: 'f107eefa572e',
+      capitals: [{ at: 'def:werrstr', say: 'the error string set' }],
+    },
+    'rerrstr.c': { summary: 'rerrstr: the error string read without clearing it (errstr swaps).', digest: 'fbcaf5403511' },
+    'access.c': { summary: 'access: dirstat for existence, else an open in the matching mode (no permission bits compared).', digest: 'd3415cfd62a5' },
+    'dirstat.c': {
+      summary: 'dirstat: the stat system call into a buffer, grown until the answer fits, unpacked into a Dir.',
+      digest: '7fe24fe7afb4',
+      capitals: [{ at: 'def:dirstat', say: 'a file\'s Dir: name, qid, mode, size...' }],
+      important: [{ at: 'code:"convM2D"', say: "the kernel's bytes to a Dir", weight: 1 }],
+    },
+    'dirfstat.c': { summary: 'dirfstat: dirstat on an open fd (fstat).', digest: 'b5a3e2dacfbc' },
+    'dirwstat.c': { summary: 'dirwstat: a Dir packed and written back (rename, chmod...).', digest: '099ae3897a4e' },
+    'dirfwstat.c': { summary: 'dirfwstat: dirwstat on an open fd.', digest: 'b061b7e4e75b' },
+    'nulldir.c': { summary: 'nulldir: a Dir of "don\'t touch" values, to wstat only the fields set.', digest: '89cf307311cf' },
+    'dirread.c': {
+      summary: 'dirread: reading a directory is reading a file of packed stats; unpacked into an array of Dirs.',
+      digest: 'b6596b4192cb',
+      capitals: [{ at: 'def:dirread', say: "a directory's entries, as Dirs" }],
+      important: [
+        { at: 'def:dirpackage', say: 'the packed stats counted, then unpacked in one malloc', weight: 2 },
+        { at: 'def:dirreadall', weight: 1 },
+      ],
+    },
+    'dirmodefmt.c': { summary: '%M: a mode printed as ls -l does (d-rwxr-xr-x).', digest: 'aa7b75e442c9' },
+    'convM2D.c': {
+      summary: "convM2D: a stat's bytes (9P's machine form) to a Dir; statcheck validates them.",
+      digest: 'e02da3b2ad6e',
+    },
+    'convD2M.c': { summary: 'convD2M: a Dir to the bytes of a stat; sizeD2M its size.', digest: 'f471d4762149' },
+    'convM2S.c': {
+      summary: "convM2S: a 9P message's bytes to an Fcall, its fields by type; what every file server reads.",
+      digest: '04d5ad23d2fa',
+      capitals: [{ at: 'def:convM2S', say: '9P bytes to an Fcall' }],
+      important: [
+        { at: 'code:"f->type = GBIT8(p)"', say: 'size[4] type[1] tag[2], then by type', weight: 2 },
+        { at: 'def:gstring', say: "a string moved down: made C's, in place", weight: 2 },
+        { at: 'def:gqid', weight: 1 },
+      ],
+    },
+    'convS2M.c': {
+      summary: 'convS2M: an Fcall to the bytes of a 9P message; sizeS2M computes its size first.',
+      digest: '07631868b816',
+      capitals: [{ at: 'def:convS2M', say: 'an Fcall to 9P bytes' }],
+      important: [
+        { at: 'def:sizeS2M', say: 'the size, by type, before writing', weight: 2 },
+        { at: 'def:pstring', say: 'a string: its length, then its bytes', weight: 1 },
+      ],
+    },
+    'read9pmsg.c': {
+      summary: 'read9pmsg: a whole 9P message read from a fd, its 4-byte size first.',
+      digest: '5d5056481af0',
+    },
+    'fcallfmt.c': {
+      summary: '%F and %D: a 9P message and a Dir printed readably (the traces of file servers).',
+      digest: 'ab675e63066b',
+      important: [
+        { at: 'def:fcallfmt', say: 'a case per message type', weight: 2 },
+        { at: 'code:"fdirconv(char *buf, char *e, Dir *d)"', say: 'a Dir as text', weight: 1 },
+      ],
+    },
+    'qlock.c': {
+      summary: 'Queued locks: qlock, rwlocks, and Rendez (sleep/wakeup) for shared-memory procs; a waiter sleeps in the rendezvous system call.',
+      digest: '422c558fc6cc',
+      capitals: [{ at: 'def:qlock', say: 'a lock that sleeps, not spins' }],
+      important: [
+        { at: 'code:"static void*    (*_rendezvousp)"', say: 'the sleep: rendezvous, or libthread\'s own', weight: 3 },
+        { at: 'def:_qlockinit', say: 'libthread swaps in its rendezvous', weight: 2 },
+        { at: 'def:getqlp', say: 'a waiter slot from a static pool, by test-and-set', weight: 2 },
+        { at: 'code:"while((*_rendezvousp)(mp, (void*)1)"', say: 'asleep until qunlock meets us', weight: 2 },
+        { at: 'def:qunlock', say: 'the lock handed to the first waiter', weight: 2 },
+        { at: 'def:rsleep', say: 'a condition variable: the qlock passed on', weight: 1 },
+      ],
+    },
+    'privalloc.c': { summary: 'privalloc: a per-process private word, from the slots at the top of the stack.', digest: '771bed7019ae' },
+    'getenv.c': {
+      summary: 'getenv: the file /env/name read (the environment is a file system).',
+      digest: '621ae334e46c',
+      important: [{ at: 'code:"/env/"', say: 'a variable is a file', weight: 2 }],
+    },
+    'putenv.c': { summary: 'putenv: /env/name created and written.', digest: 'cbed5a4ca5fe' },
+    'getwd.c': { summary: "getwd: the current directory's name, fd2path of \".\".", digest: '075e9016a0bb' },
+    'fileexists.c': { summary: 'fileexists: can it be opened? (once duplicated in 5l and 8l).', digest: '7ecaf2ed8a4e' },
+    'iounit.c': { summary: "iounit: a fd's maximum atomic I/O size, the 8th field of #d/Nctl.", digest: '9afad3af0362' },
+    'postnote.c': {
+      summary: "postnote: a note (Plan 9's signal) sent by writing /proc/pid/note or notepg.",
+      digest: '6cb5fac90bf6',
+    },
+    'time.c': {
+      summary: 'time: seconds since 1970, from nsec, or /dev/time the old way.',
+      digest: '77955222a7f9',
+      capitals: [{ at: 'def:time', say: 'seconds since 1970' }],
+      important: [{ at: 'comment:"Since the offset is kept in the Chan"', say: 'why oldtime loops: forks share the offset', weight: 1 }],
+    },
+    'nsec.c': {
+      summary: 'nsec: nanoseconds from /dev/bintime, a fd kept open per process.',
+      digest: '93f17e8966e6',
+      important: [{ at: 'comment:"Threaded programs may have multiple procs"', say: 'a fd per pid: procs may not share fds', weight: 2 }],
+    },
+    'times.c': { summary: 'times: user and system times parsed from /dev/cputime.', digest: 'ce5abf24c734' },
+    'cputime.c': { summary: 'cputime: the seconds of CPU used, from times.', digest: '75fe72c0c645' },
+    'ctime.c': {
+      summary: 'ctime, localtime, gmtime, asctime: seconds to a Tm and to text, the time zone read from /env/timezone.',
+      digest: 'c2acfa1b3093',
+      capitals: [{ at: 'def:ctime', say: 'seconds to "Thu Jan  1 00:00:00 GMT 1970"' }],
+      important: [
+        { at: 'def:gmtime', say: 'the calendar: days, then years and months', weight: 2 },
+        { at: 'def:localtime', say: 'gmtime shifted by the zone and daylight time', weight: 2 },
+        { at: 'code:"readtimezone(void)"', say: 'the zone: /env/timezone parsed', weight: 1 },
+      ],
+    },
+    'tm2sec.c': {
+      summary: 'tm2sec: the inverse, a Tm back to seconds since 1970, with its own copy of the time zone reader.',
+      digest: 'f2ca5faba111',
+      important: [
+        { at: 'def:tm2sec', weight: 2 },
+        { at: 'code:"readtimezone(void)"', say: "a copy of ctime.c's", weight: 1 },
+      ],
+    },
+    'truerand.c': { summary: 'truerand: random bits from /dev/random, kept open.', digest: '43bba1373133' },
+    'sysname.c': { summary: "sysname: the machine's name, from #c/sysname, cached.", digest: 'ea508cb3ff30' },
+    'syslog.c': {
+      summary: 'syslog: "sysname time message" appended to /sys/log/name, and the console too on request.',
+      digest: '4ba79d97250b',
+    },
+    'dial.c': {
+      summary: 'dial: a network address to a connection, through the connection server (/net/cs) and the protocol\'s clone file; its translations tried in parallel.',
+      digest: '791d6cd6ae1f',
+      capitals: [{ at: 'def:dial', say: 'a connection: "tcp!host!port" to a fd' }],
+      important: [
+        { at: 'def:_dial', say: 'a hook: libthread replaces it (no RFMEM forks)', weight: 2 },
+        { at: 'def:dialimpl', say: '/net, then /net.alt', weight: 2 },
+        { at: 'code:"csdial(DS *ds)"', say: 'cs asked: the name to clone files and addresses', weight: 3 },
+        { at: 'def:dialmulti', say: 'each address tried by a forked proc; the first wins', weight: 3 },
+        { at: 'code:"call(char *clone, char *dest"', say: 'clone opened, "connect addr" written, data opened', weight: 2 },
+      ],
+    },
+    'announce.c': {
+      summary: 'announce, listen, accept, reject: the server side of the network, again through /net files.',
+      digest: '46a04afd1937',
+      capitals: [{ at: 'def:announce', say: 'a service offered: "announce addr"' }],
+      important: [
+        { at: 'def:listen', say: 'a call waited for: the listen file opened', weight: 2 },
+        { at: 'def:accept', weight: 1 },
+        { at: 'code:"nettrans(char *addr, char *naddr"', say: 'the address translated by cs', weight: 1 },
+      ],
+    },
+    'getnetconninfo.c': { summary: "getnetconninfo: a connection's endpoints, read from its /net directory.", digest: '369538df9cbd' },
+    'setnetmtpt.c': { summary: 'setnetmtpt: the network\'s mount point (/net or another) for a dial string.', digest: '3c91957d49f9' },
+    'pushssl.c': { summary: 'pushssl: an SSL device (#D) pushed onto a connection, the keys set.', digest: '137913d43bb7' },
+    'pushtls.c': { summary: 'pushtls: the TLS device (#a) pushed onto a connection, a file of the handshake.', digest: '5c0cbabd90b4' },
+  },
+  skeletons: [
+    skeletons.parts("9sys: what libc builds on the system calls", [
+      ['read.c', 'files: read, write, as pread and pwrite'],
+      ['dirstat.c', 'directories: stat bytes to a Dir'],
+      ['sbrk.c', 'memory: the heap, for malloc'],
+      ['qlock.c', 'locks that sleep: rendezvous'],
+      ['convM2S.c', "9P: messages' bytes and Fcalls"],
+      ['dial.c', 'the network, through /net'],
+      ['ctime.c', 'time, read from files and computed'],
+      ['../9syscall/', 'the system calls themselves'],
+    ], [
+      ['read.c', '../9syscall/', 'pread'],
+      ['dirstat.c', '../9syscall/', 'stat'],
+      ['dirstat.c', 'convM2S.c', 'the same machine form'],
+      ['sbrk.c', '../9syscall/', 'brk'],
+      ['qlock.c', '../9syscall/', 'rendezvous'],
+      ['dial.c', 'read.c', "writes to /net's files"],
+    ]),
+    skeletons.chain('dial("tcp!host!port"): the network as files', [
+      ['dial.c:def:dial', 'through the _dial hook', ''],
+      ['dial.c:def:dialimpl', '/net, then /net.alt', 'the string'],
+      ['dial.c:code:"csdial(DS *ds)"', '/net/cs asked for translations', 'a netdir'],
+      ['dial.c:def:dialmulti', 'a forked proc per translation', 'several'],
+      ['dial.c:code:"call(char *clone, char *dest"', 'clone, "connect", data: the fd', 'each'],
+    ]),
+    {
+      name: 'dial.c: parallel dialing',
+      bones: [
+        { at: 'dial.c:type:DS', role: 'the dial string, parsed' },
+        { at: 'dial.c:type:Dest', role: 'the translations and their race' },
+        { at: 'dial.c:def:dialmulti', role: 'forked calls, one per address' },
+        { at: 'dial.c:def:connectwait', role: 'the first to connect wins' },
+        { at: 'dial.c:code:"call(char *clone, char *dest"', role: 'one attempt' },
+      ],
+      joints: [
+        { from: 'dial.c:type:DS', to: 'dial.c:def:dialmulti', say: 'the request' },
+        { from: 'dial.c:type:Dest', to: 'dial.c:def:dialmulti', say: 'the addresses' },
+        { from: 'dial.c:def:dialmulti', to: 'dial.c:code:"call(char *clone, char *dest"', say: 'in each child' },
+        { from: 'dial.c:def:dialmulti', to: 'dial.c:def:connectwait', say: 'the children' },
+      ],
+    },
+    {
+      name: 'announce.c: the server side',
+      bones: [
+        { at: 'announce.c:def:announce', role: 'a service offered' },
+        { at: 'announce.c:def:listen', role: 'a call arrives' },
+        { at: 'announce.c:def:accept', role: 'taken: its data file' },
+        { at: 'announce.c:def:reject', role: 'refused' },
+        { at: 'announce.c:code:"nettrans(char *addr, char *naddr"', role: 'the address translated' },
+      ],
+      joints: [
+        { from: 'announce.c:def:announce', to: 'announce.c:code:"nettrans(char *addr, char *naddr"', say: 'the address' },
+        { from: 'announce.c:def:announce', to: 'announce.c:def:listen', say: 'the directory' },
+        { from: 'announce.c:def:listen', to: 'announce.c:def:accept', say: 'a call' },
+        { from: 'announce.c:def:listen', to: 'announce.c:def:reject', say: 'or' },
+      ],
+    },
+    {
+      name: 'qlock.c: sleeping locks',
+      bones: [
+        { at: 'qlock.c:def:qlock', role: 'take, or queue and sleep' },
+        { at: 'qlock.c:def:qunlock', role: 'release, or wake the first' },
+        { at: 'qlock.c:def:getqlp', role: 'a waiter slot' },
+        { at: 'qlock.c:def:_rendezvousp', role: 'the sleep: rendezvous' },
+        { at: 'qlock.c:def:rlock', role: 'readers share' },
+        { at: 'qlock.c:def:rsleep', role: 'wait on a condition' },
+      ],
+      joints: [
+        { from: 'qlock.c:def:qlock', to: 'qlock.c:def:getqlp', say: 'held: queue' },
+        { from: 'qlock.c:def:qlock', to: 'qlock.c:def:_rendezvousp', say: 'sleep' },
+        { from: 'qlock.c:def:qunlock', to: 'qlock.c:def:_rendezvousp', say: 'wake' },
+        { from: 'qlock.c:def:rlock', to: 'qlock.c:def:getqlp', say: 'a writer: queue' },
+        { from: 'qlock.c:def:rsleep', to: 'qlock.c:def:getqlp', say: 'queue' },
+      ],
+    },
+    {
+      name: 'convM2S.c: bytes to an Fcall',
+      bones: [
+        { at: 'convM2S.c:def:convM2S', role: 'header, then fields by type' },
+        { at: 'convM2S.c:def:gstring', role: 'a string, made C in place' },
+        { at: 'convM2S.c:def:gqid', role: 'a qid' },
+      ],
+      joints: [
+        { from: 'convM2S.c:def:convM2S', to: 'convM2S.c:def:gstring', say: 'names, errors' },
+        { from: 'convM2S.c:def:convM2S', to: 'convM2S.c:def:gqid', say: 'qids' },
+      ],
+    },
+    {
+      name: 'convS2M.c: an Fcall to bytes',
+      bones: [
+        { at: 'convS2M.c:def:convS2M', role: 'fields written by type' },
+        { at: 'convS2M.c:def:sizeS2M', role: 'the size first' },
+        { at: 'convS2M.c:def:stringsz', role: "a string's size" },
+        { at: 'convS2M.c:def:pstring', role: 'a string written' },
+        { at: 'convS2M.c:def:pqid', role: 'a qid written' },
+      ],
+      joints: [
+        { from: 'convS2M.c:def:convS2M', to: 'convS2M.c:def:sizeS2M', say: 'does it fit?' },
+        { from: 'convS2M.c:def:sizeS2M', to: 'convS2M.c:def:stringsz', say: 'each string' },
+        { from: 'convS2M.c:def:convS2M', to: 'convS2M.c:def:pstring', say: 'names' },
+        { from: 'convS2M.c:def:convS2M', to: 'convS2M.c:def:pqid', say: 'qids' },
+      ],
+    },
+    {
+      name: 'fcallfmt.c: 9P printed',
+      bones: [
+        { at: 'fcallfmt.c:def:fcallfmt', role: '%F: a message' },
+        { at: 'fcallfmt.c:def:dirfmt', role: '%D: a Dir' },
+        { at: 'fcallfmt.c:code:"fdirconv(char *buf, char *e, Dir *d)"', role: 'a Dir as text' },
+        { at: 'fcallfmt.c:code:"qidtype(char *s, uchar t)"', role: 'a qid\'s type letters' },
+        { at: 'fcallfmt.c:code:"dumpsome(char *ans, char *e"', role: 'data, as text or hex' },
+      ],
+      joints: [
+        { from: 'fcallfmt.c:def:fcallfmt', to: 'fcallfmt.c:code:"fdirconv(char *buf, char *e, Dir *d)"', say: 'stat messages' },
+        { from: 'fcallfmt.c:def:dirfmt', to: 'fcallfmt.c:code:"fdirconv(char *buf, char *e, Dir *d)"', say: 'the Dir' },
+        { from: 'fcallfmt.c:def:fcallfmt', to: 'fcallfmt.c:code:"qidtype(char *s, uchar t)"', say: 'qids' },
+        { from: 'fcallfmt.c:def:fcallfmt', to: 'fcallfmt.c:code:"dumpsome(char *ans, char *e"', say: 'reads, writes' },
+      ],
+    },
+    {
+      name: 'ctime.c: seconds to a date',
+      bones: [
+        { at: 'ctime.c:def:ctime', role: 'seconds to text' },
+        { at: 'ctime.c:def:localtime', role: 'with the zone' },
+        { at: 'ctime.c:def:gmtime', role: 'the calendar computed' },
+        { at: 'ctime.c:def:asctime', role: 'a Tm as text' },
+        { at: 'ctime.c:code:"readtimezone(void)"', role: '/env/timezone' },
+      ],
+      joints: [
+        { from: 'ctime.c:def:ctime', to: 'ctime.c:def:localtime', say: 'the seconds' },
+        { from: 'ctime.c:def:localtime', to: 'ctime.c:code:"readtimezone(void)"', say: 'once' },
+        { from: 'ctime.c:def:localtime', to: 'ctime.c:def:gmtime', say: 'shifted' },
+        { from: 'ctime.c:def:ctime', to: 'ctime.c:def:asctime', say: 'a Tm' },
+      ],
+    },
+    {
+      name: 'tm2sec.c: a date to seconds',
+      bones: [
+        { at: 'tm2sec.c:def:tm2sec', role: 'a Tm to seconds' },
+        { at: 'tm2sec.c:def:yrsize', role: 'days per month, leap years' },
+        { at: 'tm2sec.c:code:"readtimezone(void)"', role: 'the zone, to undo' },
+      ],
+      joints: [
+        { from: 'tm2sec.c:def:tm2sec', to: 'tm2sec.c:def:yrsize', say: 'each year' },
+        { from: 'tm2sec.c:def:tm2sec', to: 'tm2sec.c:code:"readtimezone(void)"', say: 'the offset' },
+      ],
+    },
+  ],
+}

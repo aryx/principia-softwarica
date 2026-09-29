@@ -1,0 +1,100 @@
+// kernel/interrupts/arm/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel.nw, chapter Interrupts.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The ARM's exceptions: the vectors, the switch to SVC mode, and the C that dispatches IRQs and faults.",
+  files: {
+    'lexception.s': {
+      digest: 'bd5fd1c455bd',
+      summary: 'The exception vectors and their entries: registers saved into a Ureg, then arch__trap or arch__syscall.',
+      important: [
+        { at: 'comment:"global [[vectors]](arm)"', say: 'eight branches, copied to HVECTORS by trapinit', weight: 3 },
+        { at: 'comment:"coupling: must be just after vectors"', say: 'each vector loads its handler from here', weight: 2 },
+        { at: 'comment:"function [[_vsvc]](arm)"', say: 'SWI: a system call, straight to arch__syscall', weight: 3 },
+        { at: 'comment:"function [[_virq]](arm)"', say: 'an IRQ: its type in R0, then _vswitch', weight: 1 },
+        { at: 'def:_vswitch', say: 'every other exception: to SVC mode, a Ureg built', weight: 3 },
+        { at: 'def:_userexcep', say: 'from user mode: cpu and up reloaded (R10, R9)', weight: 2 },
+        { at: 'comment:"function [[_vfiq]](arm)"', say: 'FIQ: its own banked registers, to fiq()', weight: 1 },
+      ],
+      related: ['trap.c', '../../syscalls/arm/syscall.c'],
+    },
+    'trap.c': {
+      digest: '44973d37235f',
+      summary: 'Traps in C: the vectors installed, IRQs dispatched through Vctl handlers, faults to the pager, notes on the way out.',
+      capitals: [
+        { at: 'def:arch__trap', say: 'every exception but SWI and FIQ lands here' },
+      ],
+      important: [
+        { at: 'def:arch__trapinit', say: 'vectors copied high; a stack per processor mode', weight: 2 },
+        { at: 'type:Vctl', say: 'an interrupt handler: irq, enable bit, function', weight: 2 },
+        { at: 'def:irq', say: 'each pending handler called; a clock tick noted', weight: 3 },
+        { at: 'def:irqenable', say: 'how a driver claims an interrupt', weight: 2 },
+        { at: 'def:faultarm', say: 'a page fault: fault(), else a note or a panic', weight: 3 },
+        { at: 'comment:"delaysched set because we held a lock"', say: 'preemption: sched() only at a clock tick', weight: 3 },
+        { at: 'def:fiq', say: 'the fast interrupt: one handler, no Vctl list', weight: 1 },
+        { at: 'def:writetomem', say: 'the faulting instruction decoded: read or write?', weight: 1 },
+      ],
+      links: [
+        { from: 'def:arch__trap', to: 'def:irq' },
+        { from: 'def:arch__trap', to: 'def:faultarm' },
+      ],
+      related: ['lexception.s', '../../memory/fault.c', '../../syscalls/arm/syscall.c'],
+    },
+    'fault_helpers.s': {
+      digest: 'e6365a914ded',
+      summary: "Three coprocessor reads for trap.c: the fault's status (data, instruction) and its address.",
+    },
+  },
+  skeletons: [
+    skeletons.parts('ARM exceptions: assembly in, C dispatch', [
+      ['lexception.s', 'the vectors: registers saved, mode switched'],
+      ['trap.c', 'the dispatch: IRQs, faults, notes, preemption'],
+      ['fault_helpers.s', "the fault's status and address, read"],
+    ], [
+      ['lexception.s', 'trap.c', 'a Ureg*'],
+      ['trap.c', 'fault_helpers.s', 'what faulted, where'],
+    ]),
+    {
+      name: 'The exception entry (lexception.s)',
+      bones: [
+        { at: 'lexception.s:comment:"global [[vectors]](arm)"', role: 'the vectors, one per exception' },
+        { at: 'lexception.s:comment:"function [[_vsvc]](arm)"', role: 'SWI: a system call' },
+        { at: 'lexception.s:comment:"function [[_virq]](arm)"', role: 'IRQ (and aborts, undef: alike)' },
+        { at: 'lexception.s:def:_vswitch', role: 'to SVC mode; kernel or user?' },
+        { at: 'lexception.s:def:_userexcep', role: 'from user: cpu and up reloaded' },
+        { at: 'trap.c:def:arch__trap', role: 'the C handler' },
+        { at: '../../syscalls/arm/syscall.c:def:arch__syscall', role: 'the system call in C' },
+      ],
+      joints: [
+        { from: 'lexception.s:comment:"global [[vectors]](arm)"', to: 'lexception.s:comment:"function [[_vsvc]](arm)"', say: 'SWI' },
+        { from: 'lexception.s:comment:"global [[vectors]](arm)"', to: 'lexception.s:comment:"function [[_virq]](arm)"', say: 'IRQ' },
+        { from: 'lexception.s:comment:"function [[_virq]](arm)"', to: 'lexception.s:def:_vswitch', say: 'type in R0' },
+        { from: 'lexception.s:def:_vswitch', to: 'lexception.s:def:_userexcep', say: 'from user mode' },
+        { from: 'lexception.s:def:_vswitch', to: 'trap.c:def:arch__trap', say: 'a Ureg (from SVC mode)' },
+        { from: 'lexception.s:def:_userexcep', to: 'trap.c:def:arch__trap', say: 'a Ureg' },
+        { from: 'lexception.s:comment:"function [[_vsvc]](arm)"', to: '../../syscalls/arm/syscall.c:def:arch__syscall', say: 'a Ureg, r0 the number' },
+      ],
+    },
+    {
+      name: 'A trap dispatched (trap.c)',
+      bones: [
+        { at: 'trap.c:def:arch__trapinit', role: 'the vectors installed' },
+        { at: 'trap.c:def:arch__trap', role: 'the exception, by type' },
+        { at: 'trap.c:def:irq', role: 'an IRQ: the handlers of its line' },
+        { at: 'trap.c:type:Vctl', role: 'a handler, registered' },
+        { at: 'trap.c:def:irqenable', role: 'a driver registers one' },
+        { at: 'trap.c:def:faultarm', role: 'an abort: a page fault' },
+        { at: '../../memory/fault.c:def:fault', role: 'the portable pager' },
+      ],
+      joints: [
+        { from: 'trap.c:def:arch__trap', to: 'trap.c:def:irq', say: 'PsrMirq' },
+        { from: 'trap.c:def:irqenable', to: 'trap.c:type:Vctl', say: 'a new handler' },
+        { from: 'trap.c:type:Vctl', to: 'trap.c:def:irq', say: 'the list walked' },
+        { from: 'trap.c:def:arch__trap', to: 'trap.c:def:faultarm', say: 'PsrMabt: the address' },
+        { from: 'trap.c:def:faultarm', to: '../../memory/fault.c:def:fault', say: 'va, read or write' },
+      ],
+    },
+  ],
+}

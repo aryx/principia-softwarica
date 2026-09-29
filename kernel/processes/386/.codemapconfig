@@ -1,0 +1,156 @@
+// kernel/processes/386/: what the code map says of it
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The x86 side of processes: the context switch, the FPU, idling, and multiprocessor start-up (MP, APIC, ACPI).',
+  files: {
+    'l_switch.s': {
+      summary: 'setlabel and gotolabel on x86: the context switch, and the longjmp under waserror.',
+      digest: '75853b89425d',
+      important: [
+        { at: 'comment:"function [[gotolabel]](x86)"', say: 'the stack and pc of another context', weight: 3 },
+        { at: 'comment:"function [[setlabel]](x86)"', say: 'returns 0 now, 1 when resumed', weight: 2 },
+      ],
+    },
+    'main_processes.c': {
+      summary: 'x86 process hooks: FPU/SSE state saved and restored at switches, and the idle loop halting the CPU.',
+      digest: '86c4b78a4ecd',
+      important: [
+        { at: 'def:arch_procsave', say: 'the FP state saved lazily', weight: 2 },
+        { at: 'def:arch_procrestore', say: 'the counters and FP back', weight: 1 },
+        { at: 'def:arch_idlehands', say: 'nothing to run: halt, or spin on SMP', weight: 2 },
+        { at: 'def:fpsavealloc', say: 'the SSE save area, aligned', weight: 1 },
+      ],
+    },
+    'dat_processes.h': {
+      summary: "x86's a.out magic and the saved FP state (Arch_FPsave).",
+      digest: '6716610b2804',
+    },
+    'mp.c': {
+      summary: "Intel's MultiProcessor tables read: CPUs, buses, I/O APICs; the other CPUs started; interrupts routed.",
+      digest: '9d12dff79807',
+      capitals: [
+        { at: 'def:mpinit', say: 'the MP table read, the other CPUs started' },
+      ],
+      important: [
+        { at: 'def:mpstartap', say: 'an application processor woken by IPIs', weight: 3 },
+        { at: 'def:squidboy', say: 'where a new CPU starts in C', weight: 2 },
+        { at: 'def:mpintrenable', say: 'an interrupt routed through an I/O APIC', weight: 2 },
+        { at: 'def:mkprocessor', say: 'a CPU entry of the table', weight: 1 },
+        { at: 'def:mpshutdown', say: 'all CPUs stopped', weight: 1 },
+      ],
+    },
+    'mpacpi.c': {
+      summary: "Minimal ACPI: the MADT scanned for the CPUs' local APICs, when there is no MP table.",
+      digest: '964d887bf0a8',
+      important: [
+        { at: 'def:mpacpiscan', say: 'the RSDP found, the tables walked', weight: 2 },
+        { at: 'def:mpacpiproc', say: 'a local APIC: a CPU', weight: 1 },
+      ],
+    },
+    'apic.c': {
+      summary: "The local APIC (per-CPU interrupts, timer, IPIs) and the I/O APIC's redirection table.",
+      digest: '91254a4869da',
+      important: [
+        { at: 'def:lapicinit', say: 'a CPU\'s APIC and its timer set up', weight: 2 },
+        { at: 'def:lapicstartap', say: 'INIT and STARTUP IPIs', weight: 2 },
+        { at: 'def:lapiceoi', say: 'end of interrupt', weight: 1 },
+        { at: 'def:ioapicinit', say: 'the I/O APIC reset', weight: 1 },
+        { at: 'def:lapictimerset', say: 'the next timer interrupt', weight: 1 },
+      ],
+    },
+    'archmp.c': {
+      summary: 'The PCArch for MP machines: identify, start the other CPUs, the APIC timer, interrupt routing.',
+      digest: '280d0ad200a3',
+      important: [
+        { at: 'def:identify', say: 'an MP table found? then this arch', weight: 2 },
+        { at: 'def:syncclock', say: "the CPUs' cycle counters synchronized", weight: 1 },
+      ],
+    },
+    'archgeneric.c': {
+      summary: 'The generic PCArch: a uniprocessor with the i8259 and the i8253 timer; the fallback.',
+      digest: 'f4c7ee65f3f8',
+    },
+  },
+  skeletons: [
+    skeletons.parts('x86 processes and processors', [
+      ['l_switch.s', 'the context switch'],
+      ['main_processes.c', 'FPU state and idle'],
+      ['archmp.c', 'the MP machine: a PCArch'],
+      ['archgeneric.c', 'the uniprocessor PCArch'],
+      ['mp.c', 'the MP table, CPUs started'],
+      ['mpacpi.c', 'the CPUs from ACPI instead'],
+      ['apic.c', 'local and I/O APICs'],
+      ['../proc.c', 'the scheduler'],
+    ], [
+      ['../proc.c', 'l_switch.s', 'setlabel, gotolabel'],
+      ['../proc.c', 'main_processes.c', 'procsave, idlehands'],
+      ['archmp.c', 'mp.c', 'mpinit'],
+      ['mp.c', 'mpacpi.c', 'no MP table'],
+      ['mp.c', 'apic.c', 'CPUs and interrupts'],
+      ['archmp.c', 'archgeneric.c', 'falls back'],
+    ]),
+    {
+      name: 'mp.c: the other CPUs started',
+      bones: [
+        { at: 'mp.c:def:mpinit', role: 'the table walked' },
+        { at: 'mp.c:def:mkprocessor', role: 'a CPU' },
+        { at: 'mp.c:def:mkioapic', role: 'an I/O APIC' },
+        { at: 'mp.c:def:mpstartap', role: 'a CPU woken' },
+        { at: 'mp.c:def:squidboy', role: 'it runs: schedinit' },
+        { at: 'mp.c:def:mpintrenable', role: 'an IRQ routed' },
+      ],
+      joints: [
+        { from: 'mp.c:def:mpinit', to: 'mp.c:def:mkprocessor', say: 'PcmpPROCESSOR' },
+        { from: 'mp.c:def:mpinit', to: 'mp.c:def:mkioapic', say: 'PcmpIOAPIC' },
+        { from: 'mp.c:def:mpinit', to: 'mp.c:def:mpstartap', say: 'each CPU' },
+        { from: 'mp.c:def:mpstartap', to: 'mp.c:def:squidboy', say: 'apbootstrap' },
+      ],
+    },
+    {
+      name: 'mpacpi.c: CPUs from ACPI',
+      bones: [
+        { at: 'mpacpi.c:def:mpacpi', role: 'the entry' },
+        { at: 'mpacpi.c:def:mpacpiscan', role: 'the RSDP found' },
+        { at: 'mpacpi.c:def:mpacpitbl', role: 'a table' },
+        { at: 'mpacpi.c:def:mpacpicpus', role: 'the MADT' },
+        { at: 'mpacpi.c:def:mpacpiproc', role: 'a local APIC' },
+        { at: 'mpacpi.c:def:mpnewproc', role: 'an MP entry made' },
+      ],
+      joints: [
+        { from: 'mpacpi.c:def:mpacpi', to: 'mpacpi.c:def:mpacpiscan', say: 'search' },
+        { from: 'mpacpi.c:def:mpacpi', to: 'mpacpi.c:def:mpacpitbl', say: 'found' },
+        { from: 'mpacpi.c:def:mpacpitbl', to: 'mpacpi.c:def:mpacpicpus', say: 'APIC' },
+        { from: 'mpacpi.c:def:mpacpicpus', to: 'mpacpi.c:def:mpacpiproc', say: 'each entry' },
+        { from: 'mpacpi.c:def:mpacpiproc', to: 'mpacpi.c:def:mpnewproc', say: 'a CPU' },
+      ],
+    },
+    {
+      name: 'apic.c: the APICs',
+      bones: [
+        { at: 'apic.c:def:lapicinit', role: "a CPU's APIC" },
+        { at: 'apic.c:def:lapictimerinit', role: 'its timer calibrated' },
+        { at: 'apic.c:def:lapicw', role: 'a register written' },
+        { at: 'apic.c:def:lapicstartap', role: 'another CPU started' },
+        { at: 'apic.c:def:ioapicinit', role: 'the I/O APIC' },
+      ],
+      joints: [
+        { from: 'apic.c:def:lapicinit', to: 'apic.c:def:lapictimerinit', say: 'calibrate' },
+        { from: 'apic.c:def:lapicinit', to: 'apic.c:def:lapicw', say: 'registers' },
+        { from: 'apic.c:def:lapicstartap', to: 'apic.c:def:lapicw', say: 'IPIs' },
+      ],
+    },
+    {
+      name: 'main_processes.c: switches and idling',
+      bones: [
+        { at: 'main_processes.c:def:arch_procsetup', role: 'a new process: FP fresh' },
+        { at: 'main_processes.c:def:arch_procsave', role: 'switched out' },
+        { at: 'main_processes.c:def:arch_procrestore', role: 'switched in' },
+        { at: 'main_processes.c:def:arch_idlehands', role: 'nothing ready' },
+      ],
+      joints: [
+        { from: 'main_processes.c:def:arch_procsave', to: 'main_processes.c:def:arch_procrestore', say: 'another process ran' },
+      ],
+    },
+  ],
+}

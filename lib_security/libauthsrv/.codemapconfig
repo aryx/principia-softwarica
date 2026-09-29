@@ -1,0 +1,110 @@
+// lib_security/libauthsrv/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). No book yet: from the code, include/security/authsrv.h
+// and security/docs/auth.ms.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The authentication server's protocol, client side: tickets as bytes, a password as a DES key, the machine's key in nvram.",
+  files: {
+    '_asgetticket.c': {
+      summary: 'A ticket request sent to the auth server, the two sealed tickets read back.',
+      digest: '4d894a355656',
+      capitals: [{ at: 'def:_asgetticket', say: 'ticket request in, two tickets out' }],
+    },
+    '_asrdresp.c': {
+      summary: "The auth server's answer read: AuthOK and its bytes, AuthErr and its message, or a length.",
+      digest: '19ed1400cb9a',
+      important: [{ at: 'def:_asrdresp', say: 'the first byte says which answer follows', weight: 2 }],
+    },
+    'authdial.c': {
+      summary: 'The auth server dialed by its domain: the body commented out here (no ndb), always -1.',
+      digest: '3f5cbc1a5856',
+      important: [{ at: 'def:authdial', say: 'ndb lookup disabled: returns -1', weight: 2 }],
+    },
+    'convA2M.c': {
+      summary: 'An Authenticator to bytes, DES-encrypted with the key (the reply proving one knows it).',
+      digest: 'b94950ef8ce7',
+    },
+    'convM2A.c': {
+      summary: 'Bytes decrypted with the key back into an Authenticator.',
+      digest: '1b843a9170a0',
+    },
+    'convM2PR.c': {
+      summary: 'A password-change request decrypted from bytes (authsrv side).',
+      digest: 'c7eb769f1e7f',
+    },
+    'convM2T.c': {
+      summary: 'A ticket decrypted with a key: the client, server, the shared session key.',
+      digest: '8fc4b1ca8b2b',
+      important: [{ at: 'def:convM2T', say: 'only who holds the key can open the ticket', weight: 2 }],
+    },
+    'convM2TR.c': {
+      summary: 'Bytes to a ticket request (clear: the request is not secret).',
+      digest: '486dcfefeae3',
+    },
+    'convPR2M.c': {
+      summary: 'A password-change request to bytes, encrypted with the old key.',
+      digest: 'e870e5d201fa',
+    },
+    'convT2M.c': {
+      summary: 'A ticket to bytes, sealed with a key: what the auth server hands out.',
+      digest: '37a664e7acaf',
+      capitals: [{ at: 'def:convT2M', say: 'a ticket sealed' }],
+    },
+    'convTR2M.c': {
+      summary: 'A ticket request to bytes: type, ids, domain, challenge, users.',
+      digest: '72ef94880b66',
+    },
+    'nvcsum.c': {
+      summary: "A byte sum checking the nvram's fields.",
+      digest: '0d43d0f7e4b3',
+    },
+    'opasstokey.c': {
+      summary: 'The old way a password became a DES key, kept for old key files.',
+      digest: '9cfe4da330e3',
+    },
+    'passtokey.c': {
+      summary: 'A password to a 7-byte DES key: 8 characters folded, the rest chained by encryption.',
+      digest: 'f874d780b2ea',
+      capitals: [{ at: 'def:passtokey', say: 'password to key: all of p9sk1 rests on it' }],
+      important: [{ at: 'code:"encrypt(key, t, 8)"', say: 'each next 8 bytes encrypted under the key so far', weight: 2 }],
+    },
+    'readnvram.c': {
+      summary: "The machine's key, auth id and domain read from nvram (or a disk partition, a flash), asked at the console if bad.",
+      digest: 'ff189f96ff40',
+      capitals: [{ at: 'def:readnvram', say: "the machine's secrets at boot" }],
+      important: [
+        { at: 'def:nvtab', say: 'where each cpu type keeps its nvram', weight: 2 },
+        { at: 'def:findnvram', say: '$nvram, else the table: the first that opens', weight: 2 },
+        { at: 'code:"err |= check(safe->machkey"', say: 'each field has its checksum', weight: 1 },
+        { at: 'def:readcons', say: 'raw mode for passwords: no echo', weight: 1 },
+        { at: 'def:dosparse', say: 'a FAT partition parsed to find plan9.nvr', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('The auth server spoken to, and the keys it needs', [
+      ['convTR2M.c', 'a ticket request to bytes'],
+      ['_asgetticket.c', 'sent to the auth server, tickets back'],
+      ['_asrdresp.c', 'the server answer read'],
+      ['convM2T.c', 'a ticket opened with the key'],
+      ['passtokey.c', 'the key: from a password'],
+      ['readnvram.c', "the key: from the machine's nvram"],
+    ], [
+      ['convTR2M.c', '_asgetticket.c', 'the request'],
+      ['_asgetticket.c', '_asrdresp.c', 'the answer'],
+      ['_asgetticket.c', 'convM2T.c', 'sealed tickets'],
+      ['passtokey.c', 'convM2T.c', 'the user key'],
+      ['readnvram.c', 'convM2T.c', 'the machine key'],
+    ]),
+    skeletons.chain('readnvram: where the secrets are, checked, else asked', [
+      ['readnvram.c:def:readnvram', 'the entry: flags say read, write or ask', ''],
+      ['readnvram.c:def:findnvram', '$nvram or the table, opened', 'where'],
+      ['readnvram.c:def:nvtab', 'cpu type to device, offset, length', 'looked up'],
+      ['readnvram.c:def:dosparse', 'a 9fat partition: the file plan9.nvr found', 'offset -1'],
+      ['readnvram.c:def:check', 'each field its checksum', 'the bytes read'],
+      ['readnvram.c:def:readcons', 'bad or asked: typed at the console', 'on error'],
+    ]),
+  ],
+}

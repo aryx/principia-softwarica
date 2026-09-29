@@ -1,0 +1,313 @@
+// networking/ndb/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). The network database's servers: cs (names to /net addresses) and
+// dns (the resolver and name server), both 9P file servers in /net, and
+// the tools around them. The library they read, libndb, is lib_networking's.
+local skeletons = import '../../skeletons.libsonnet';
+// a module's own skeleton: [def, role] bones in one file, [from, to, say] joints
+local mod(name, file, bones, joints) = {
+  name: name,
+  bones: [{ at: file + ':def:' + b[0], role: b[1] } for b in bones],
+  joints: [{ from: file + ':def:' + j[0], to: file + ':def:' + j[1], say: j[2] } for j in joints],
+};
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The network database servers: cs turns net!host!service into /net files, dns resolves and serves names.',
+  files: {
+    'cs.c': {
+      summary: "cs, the connection server at /net/cs: dial's net!host!service translated into /net/tcp/clone and an address.",
+      digest: '38b5fff6485f',
+      capitals: [
+        { at: 'def:main', say: 'mounted on /net/cs, then 9P' },
+        { at: 'def:lookup', say: 'a dial string to its translations' },
+      ],
+      important: [
+        { at: 'def:network', say: 'per network: its lookup and translation', weight: 3 },
+        { at: 'def:rwrite', say: 'a query written: net!host!service', weight: 2 },
+        { at: 'def:iplookup', say: 'host to addresses: ndb, then dns', weight: 2 },
+        { at: 'def:dnsiplookup', say: 'dns asked through /net/dns', weight: 2 },
+        { at: 'def:iptrans', say: 'an address to "/net/tcp/clone 1.2.3.4!80"', weight: 2 },
+        { at: 'def:ipserv', say: 'a service name to its port', weight: 1 },
+        { at: 'def:rread', say: 'the answers read back, a line each', weight: 1 },
+      ],
+      links: [
+        { from: 'def:rwrite', to: 'def:lookup' },
+        { from: 'def:lookup', to: 'def:iplookup' },
+        { from: 'def:iplookup', to: 'def:dnsiplookup' },
+      ],
+    },
+    'dns.h': {
+      summary: "dns's types: DN (a name in the cache) and its RR (resource records), DNSmsg, Request, Area, Server.",
+      digest: 'e8c3b4e69a06',
+      capitals: [
+        { at: 'comment:resource records off this name', say: 'DN: a domain name, its records' },
+        { at: 'comment:domain that owns this resource record', say: 'RR: a resource record' },
+      ],
+      important: [
+        { at: 'type:DNSmsg', say: 'a message: question, answers, authority, extra', weight: 2 },
+        { at: 'comment:where master jumps to after starting a slave', say: 'Request: slaves longjmp back', weight: 2 },
+        { at: 'type:Area', say: 'a zone we are authoritative for', weight: 1 },
+      ],
+    },
+    'dns.c': {
+      summary: 'dns: the resolver as a file server at /net/dns (a query written, answers read), and optionally a UDP server.',
+      digest: 'ec3b866ae16d',
+      capitals: [{ at: 'def:main', say: 'cache, database, mount, serve' }],
+      important: [
+        { at: 'def:io', say: 'the 9P loop', weight: 1 },
+        { at: 'def:rwrite', say: 'a query: "name type"', weight: 2 },
+        { at: 'def:lookupqueryold', say: 'dnresolve called directly', weight: 3 },
+        { at: 'code:"dnudpserver(mntpt)"', say: 'serving others too: a process on udp 53', weight: 2 },
+      ],
+    },
+    'dnresolve.c': {
+      summary: 'The resolver (RFCs 1035, 1123): the cache, the database, then name servers queried from the root down.',
+      digest: '2ac60e5f81c0',
+      capitals: [{ at: 'def:dnresolve', say: 'a name and type to records' }],
+      important: [
+        { at: 'def:dnresolve1', say: 'cache, cname, database, network, in order', weight: 3 },
+        { at: 'type:Query', say: 'one resolution in progress', weight: 1 },
+        { at: 'def:netquery', say: 'the name servers for the name, walked up', weight: 2 },
+        { at: 'def:queryns', say: 'a server asked, UDP then TCP', weight: 2 },
+        { at: 'def:procansw', say: 'an answer cached, referrals followed', weight: 2 },
+        { at: 'def:cacheneg', say: 'a negative answer cached too', weight: 1 },
+      ],
+      links: [
+        { from: 'def:dnresolve', to: 'def:dnresolve1' },
+        { from: 'def:dnresolve1', to: 'def:netquery' },
+      ],
+    },
+    'dn.c': {
+      summary: 'The cache: domain names hashed, their resource records attached, aged and purged; RR formatting.',
+      digest: '046b14455a34',
+      capitals: [
+        { at: 'def:dnlookup', say: 'a name to its DN, created if asked' },
+        { at: 'def:rrlookup', say: 'the records of a type, from the cache' },
+      ],
+      important: [
+        { at: 'def:rrattach', say: 'records added, the old ones replaced', weight: 2 },
+        { at: 'def:dnageall', say: 'the cache aged: expired records dropped', weight: 2 },
+        { at: 'def:slave', say: 'a slow query forks a slave', weight: 2 },
+        { at: 'def:rrfmt', say: '%R: a record printed', weight: 1 },
+      ],
+    },
+    'dblookup.c': {
+      summary: 'The database: RRs made from ndb entries (dom=, ip=, ns=, soa=...), our zones loaded into the cache.',
+      digest: 'acd15696cf8b',
+      capitals: [{ at: 'def:dblookup', say: 'a name looked up in ndb' }],
+      important: [
+        { at: 'def:dblookup1', say: 'ndb tuples to RRs, by type', weight: 2 },
+        { at: 'def:db2cache', say: 'authoritative zones loaded', weight: 2 },
+        { at: 'def:createptrs', say: 'reverse zones made', weight: 1 },
+        { at: 'def:dnsservers', say: 'our servers, from ndb', weight: 1 },
+      ],
+    },
+    'dnserver.c': {
+      summary: 'The name server: a question answered from our zones or, if recursion is wanted, by resolving it.',
+      digest: 'ff62d9f898d3',
+      capitals: [{ at: 'def:dnserver', say: 'a question to a reply' }],
+      important: [{ at: 'def:doextquery', say: 'the extra section: glue addresses', weight: 1 }],
+    },
+    'dnudpserver.c': {
+      summary: 'DNS over UDP: requests read on port 53, each answered by a slave, retransmissions recognized.',
+      digest: '9310b1c67c8f',
+      capitals: [{ at: 'def:dnudpserver', say: 'the UDP loop' }],
+      important: [{ at: 'def:clientrxmit', say: 'a retransmission of a query in progress: dropped', weight: 1 }],
+    },
+    'dnstcp.c': {
+      summary: 'dnstcp: DNS over TCP, run by listen; one request per call, zone transfers included.',
+      digest: '18e75de79d32',
+      capitals: [{ at: 'def:main', say: 'read a message, answer, repeat' }],
+      important: [{ at: 'def:dnzone', say: 'AXFR: a whole zone sent', weight: 1 }],
+    },
+    'convM2DNS.c': {
+      summary: 'Wire to structs: a DNS message parsed, names decompressed, truncation detected.',
+      digest: '58e9a86a6bc4',
+      capitals: [{ at: 'def:convM2DNS', say: 'bytes to a DNSmsg' }],
+      important: [
+        { at: 'def:gname', say: 'a name, with compression pointers', weight: 2 },
+        { at: 'def:convM2RR', say: 'a record, by type', weight: 1 },
+      ],
+    },
+    'convDNS2M.c': {
+      summary: 'Structs to wire: a DNS message built, names compressed with a dictionary.',
+      digest: '9f2f0ab49a72',
+      capitals: [{ at: 'def:convDNS2M', say: 'a DNSmsg to bytes' }],
+      important: [{ at: 'def:pname', say: 'a name, compressed', weight: 1 }],
+    },
+    'dnarea.c': {
+      summary: 'Areas: the zones we are authoritative for, and when to refresh them.',
+      digest: 'f7a3da794392',
+      important: [{ at: 'def:inmyarea', say: 'is this name ours?', weight: 1 }],
+    },
+    'dnnotify.c': {
+      summary: 'DNS NOTIFY: zone changes announced to slaves, and received from masters.',
+      digest: 'daa9a1279b11',
+    },
+    'dnsdebug.c': {
+      summary: 'dnsdebug: the resolver run interactively, every step logged, against any server.',
+      digest: 'ee0dca8322cd',
+      capitals: [{ at: 'def:main', say: 'queries typed, traces printed' }],
+    },
+    'dnsquery.c': {
+      summary: 'dnsquery (ndb/dnsquery): names and types written to /net/dns, answers printed.',
+      digest: '853fcec25f06',
+      capitals: [{ at: 'def:main', say: 'a loop over /net/dns' }],
+    },
+    'csquery.c': {
+      summary: 'csquery: dial strings written to /net/cs, translations printed.',
+      digest: 'eeaca3894e0c',
+      capitals: [{ at: 'def:main', say: 'a loop over /net/cs' }],
+    },
+    'query.c': {
+      summary: 'ndb/query: the database searched for attr=value, a field printed.',
+      digest: 'bbbf91585563',
+      capitals: [{ at: 'def:main', say: 'ndbsearch, then print' }],
+    },
+    'ipquery.c': {
+      summary: 'ndb/ipquery: attributes for an address, inherited from its subnets (ndbipinfo).',
+      digest: 'd013c074bf29',
+      capitals: [{ at: 'def:main', say: 'ndbipinfo printed' }],
+    },
+    'mkhash.c': {
+      summary: 'ndb/mkhash: a hash file for an attribute of a database file, for fast lookups.',
+      digest: 'b5830a55471f',
+      capitals: [{ at: 'def:main', say: 'entries hashed, the table written' }],
+    },
+    'mkdb.c': {
+      summary: 'ndb/mkdb: a hosts-style file converted into ndb entries.',
+      digest: 'b125522c3c8b',
+      capitals: [{ at: 'def:main', say: 'lines to tuples' }],
+    },
+    'mkhosts.c': {
+      summary: 'ndb/mkhosts: Unix hosts files generated from the database, for a domain.',
+      digest: '04df4814a244',
+      capitals: [{ at: 'def:main', say: 'ndb to hosts' }],
+    },
+    'inform.c': {
+      summary: 'inform: an RFC 2136 DNS update sent to a (Windows) server, registering our name.',
+      digest: '82935d5a3204',
+      capitals: [{ at: 'def:main', say: 'the update built and sent' }],
+    },
+  },
+  skeletons: [
+    skeletons.chain('A name dialed: dial to cs to dns to the network', [
+      ['cs.c:def:rwrite', 'dial writes net!host!service to /net/cs', ''],
+      ['cs.c:def:lookup', 'each network tried', 'the dial string'],
+      ['cs.c:def:iplookup', 'the host: ndb first', 'tcp, udp...'],
+      ['cs.c:def:dnsiplookup', 'then /net/dns', 'not in ndb'],
+      ['dns.c:def:rwrite', 'dns gets "host ip"', '9P write'],
+      ['dnresolve.c:def:dnresolve', 'cache, database, name servers', 'name, type'],
+      ['dnresolve.c:def:queryns', 'a server asked over UDP', 'not known here'],
+      ['cs.c:def:iptrans', '"/net/tcp/clone 1.2.3.4!80" read back by dial', 'the addresses'],
+    ]),
+    skeletons.cmd('cs: the connection server', 'cs.c:def:main', [
+      ['cs.c:def:mountinit', 'posted, mounted on /net/cs', ''],
+      ['cs.c:def:io', '9P requests served', ''],
+      ['cs.c:def:rwrite', 'a query', 'Twrite'],
+      ['cs.c:def:lookup', 'translated', 'the query'],
+      ['cs.c:def:network', 'per network: lookup and translate', 'np->lookup (a function pointer)'],
+    ]),
+    skeletons.cmd('dns: the resolver and name server', 'dns.c:def:main', [
+      ['dn.c:def:dninit', 'the cache', ''],
+      ['dblookup.c:def:db2cache', 'our zones loaded', 'ndb'],
+      ['dns.c:def:io', '/net/dns served', 'mounted'],
+      ['dns.c:def:lookupqueryold', 'a query resolved', 'Twrite'],
+      ['dnresolve.c:def:dnresolve', 'the resolver', 'name, type'],
+      ['dnudpserver.c:def:dnudpserver', 'and others served on udp 53', '-s'],
+    ]),
+    mod('The resolver: dnresolve.c', 'dnresolve.c', [
+      ['dnresolve', 'the entry'], ['dnresolve1', 'cache, database, network'],
+      ['netquery', 'servers for the name'], ['queryns', 'a server asked'],
+      ['udpquery', 'over UDP'], ['procansw', 'the answer used'],
+    ], [
+      ['dnresolve', 'dnresolve1', 'a name'], ['dnresolve1', 'netquery', 'not cached'],
+      ['netquery', 'queryns', 'the NS records'], ['queryns', 'udpquery', 'a message'],
+      ['udpquery', 'procansw', 'the reply'],
+    ]),
+    mod('The cache: dn.c', 'dn.c', [
+      ['dnlookup', 'a name hashed'], ['rrattach', 'records attached'], ['rrlookup', 'records found'],
+      ['dnageall', 'records aged'], ['slave', 'a slow query forked'],
+    ], [
+      ['dnlookup', 'rrattach', 'the DN'], ['dnlookup', 'rrlookup', 'the DN'], ['dnageall', 'rrlookup', 'fewer'],
+    ]),
+    mod('The database: dblookup.c', 'dblookup.c', [
+      ['opendatabase', 'ndb opened'], ['dblookup', 'a name looked up'], ['dblookup1', 'tuples to RRs'],
+      ['db2cache', 'zones loaded'], ['createptrs', 'reverse zones'],
+    ], [
+      ['dblookup', 'dblookup1', 'name, type'], ['db2cache', 'createptrs', ''], ['db2cache', 'opendatabase', 'reread'],
+    ]),
+    mod('The name server: dnserver.c', 'dnserver.c', [
+      ['dnserver', 'a question answered'], ['doextquery', 'extra records'], ['hint', 'glue added'],
+    ], [['dnserver', 'doextquery', 'the answers'], ['doextquery', 'hint', 'each NS']]),
+    mod('UDP service: dnudpserver.c', 'dnudpserver.c', [
+      ['dnudpserver', 'the loop'], ['udpannounce', 'udp!*!53'], ['clientrxmit', 'duplicates dropped'], ['reply', 'the answer sent'],
+    ], [['dnudpserver', 'udpannounce', ''], ['dnudpserver', 'clientrxmit', 'a request'], ['dnudpserver', 'reply', 'answered']]),
+    mod('Wire to structs: convM2DNS.c', 'convM2DNS.c', [
+      ['convM2DNS', 'a message'], ['convM2Q', 'a question'], ['convM2RR', 'a record'], ['gname', 'a name'],
+    ], [['convM2DNS', 'convM2Q', ''], ['convM2DNS', 'convM2RR', ''], ['convM2RR', 'gname', 'pointers followed']]),
+    mod('Structs to wire: convDNS2M.c', 'convDNS2M.c', [
+      ['convDNS2M', 'a message'], ['convQ2M', 'a question'], ['convRR2M', 'a record'], ['pname', 'a name, compressed'],
+    ], [['convDNS2M', 'convQ2M', ''], ['convDNS2M', 'convRR2M', ''], ['convRR2M', 'pname', 'the dictionary']]),
+    mod('Zones: dnarea.c', 'dnarea.c', [
+      ['addarea', 'a zone of ours'], ['inmyarea', 'a name tested'], ['refresh_areas', 'zones reloaded'],
+    ], [['addarea', 'inmyarea', 'the list']]),
+    mod('NOTIFY: dnnotify.c', 'dnnotify.c', [
+      ['notifyproc', 'a process'], ['notify_areas', 'each changed zone'], ['send_notify', 'a slave told'], ['dnnotify', 'a notify received'],
+    ], [['notifyproc', 'notify_areas', ''], ['notify_areas', 'send_notify', 'each slave']]),
+    skeletons.cmd('dnstcp: DNS over TCP', 'dnstcp.c:def:main', [
+      ['dnstcp.c:def:readmsg', 'a message read', 'the call'],
+      ['dnserver.c:def:dnserver', 'answered', 'a DNSmsg'],
+      ['dnstcp.c:def:reply', 'sent back', 'the reply'],
+    ]),
+    skeletons.cmd('dnsdebug', 'dnsdebug.c:def:main', [
+      ['dnsdebug.c:def:docmd', 'a command typed', 'stdin'],
+      ['dnsdebug.c:def:doquery', 'resolved with traces', 'name, type'],
+      ['dnresolve.c:def:dnresolve', 'the real resolver', ''],
+    ]),
+    skeletons.cmd('dnsquery', 'dnsquery.c:def:main', [
+      ['dnsquery.c:def:setup', '/net/dns opened', ''],
+      ['dnsquery.c:def:query', 'each line queried', 'stdin'],
+    ]),
+    skeletons.cmd('csquery', 'csquery.c:def:main', [['csquery.c:def:query', 'a dial string translated', 'stdin or argv']]),
+    skeletons.cmd('query', 'query.c:def:main', [['query.c:def:search', 'the database searched', 'attr, value']]),
+    skeletons.cmd('ipquery', 'ipquery.c:def:main', [['ipquery.c:def:search', 'ndbipinfo', 'the address']]),
+    skeletons.cmd('mkhash', 'mkhash.c:def:main', [['mkhash.c:def:enter', 'each value hashed', 'the file']]),
+    skeletons.cmd('mkdb', 'mkdb.c:def:main', [['mkdb.c:def:tprint', 'an entry printed', 'a line']]),
+    skeletons.cmd('mkhosts', 'mkhosts.c:def:main', [['mkhosts.c:def:parse', 'the database read', 'the files'], ['mkhosts.c:def:printentry', 'hosts lines written', 'each system']]),
+    skeletons.cmd('inform', 'inform.c:def:main', [['inform.c:def:pname', 'the update message built', 'our name, address']]),
+    skeletons.parts('ndb: two servers and their tools', [
+      ['cs.c', 'the connection server'],
+      ['dns.c', 'the DNS file server'],
+      ['dnresolve.c', 'the resolver'],
+      ['dn.c', 'the cache'],
+      ['dblookup.c', 'the database as records'],
+      ['dnserver.c', 'the name server (with dnudpserver.c, dnstcp.c)'],
+      ['convM2DNS.c', 'the wire format (and convDNS2M.c)'],
+      ['query.c', 'the command line tools'],
+    ], [
+      ['cs.c', 'dns.c', '/net/dns'],
+      ['dns.c', 'dnresolve.c', 'a query'],
+      ['dnresolve.c', 'dn.c', 'cached'],
+      ['dnresolve.c', 'dblookup.c', 'ours'],
+      ['dnresolve.c', 'convM2DNS.c', 'the network'],
+      ['dnserver.c', 'dnresolve.c', 'recursion'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'dial("tcp!plan9.io!http"): from a name to a connection',
+      stops: [
+        { at: 'cs.c:def:network', say: 'Each network knows how to look up a host and translate the result.' },
+        { at: 'cs.c:def:lookup', say: 'cs tries the networks in turn: "net" means any of them.' },
+        { at: 'cs.c:def:iplookup', say: 'The local database first; DNS only when ndb has nothing.' },
+        { at: 'dns.c:def:rwrite', say: 'DNS is a file too: a query written, answers read.' },
+        { at: 'dnresolve.c:def:dnresolve1', say: 'The order: cache, our own zones, then the network.' },
+        { at: 'dnresolve.c:def:netquery', say: 'The name servers, from the closest known zone up to the root.' },
+        { at: 'convM2DNS.c:def:gname', say: 'The wire format: compressed names, the classic trap.' },
+        { at: 'dn.c:def:rrattach', say: 'The answer cached, with its time to live.' },
+        { at: 'cs.c:def:iptrans', say: 'Back in cs: a clone file and an address, which dial opens.' },
+      ],
+    },
+  ],
+}

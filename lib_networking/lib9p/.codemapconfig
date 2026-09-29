@@ -1,0 +1,230 @@
+// lib_networking/lib9p/: what the code map says of it (tinybox codemap)
+// claude: the Srv's callbacks (srv->read, srv->walk1...) are called through
+// function pointers, invisible to "called by": the joints say them.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The 9P file-server library: a program fills a Srv with callbacks, srv() reads each T-message, calls one, sends the R.',
+  files: {
+    'srv.c': {
+      summary: "The server loop: a Req per message, checked (fids, modes, offsets), handed to the Srv's callback; respond() replies.",
+      digest: '207736f774ff',
+      capitals: [
+        { at: 'def:srv', say: 'the loop: a message in, a callback called' },
+        { at: 'def:respond', say: "the reply: every handler's last call" },
+      ],
+      important: [
+        { at: 'def:getreq', say: 'one message read and parsed into a Req', weight: 2 },
+        { at: 'code:"switch(r->ifcall.type){"', say: 'the dispatch on the message type', weight: 3 },
+        { at: 'def:sread', say: 'checks, then srv->read (or the File tree)', weight: 2 },
+        { at: 'def:swalk', say: 'a path walked: srv->walk, or walk1 and clone', weight: 2 },
+        { at: 'def:walkandclone', say: 'Twalk built from walk1 and clone', weight: 1 },
+        { at: 'comment:"Flush is special"', say: 'a flushed request answered once, later', weight: 2 },
+        { at: 'code:"r->ofcall.type = r->ifcall.type+1"', say: 'R is T+1', weight: 1 },
+      ],
+      related: ['../../include/ipc/9p.h', '../../include/ipc/fcall.h'],
+    },
+    'file.c': {
+      summary: 'File trees in memory: files created, walked, removed, listed; a server with a Tree needs no walk of its own.',
+      digest: '7d780e5bffe4',
+      important: [
+        { at: 'comment:"To avoid deadlock"', say: 'child before parent, always', weight: 3 },
+        { at: 'def:alloctree', say: 'a Tree with its root', weight: 2 },
+        { at: 'def:createfile', say: 'a File in a directory', weight: 2 },
+        { at: 'def:walkfile', weight: 1 },
+        { at: 'def:readdirfile', say: 'a directory read as stat entries', weight: 1 },
+        { at: 'def:removefile', weight: 1 },
+      ],
+    },
+    'fid.c': {
+      summary: "Fids: a client's handle numbers mapped to Fid structures, reference counted.",
+      digest: 'db5dd2b52ee0',
+      important: [
+        { at: 'def:allocfid', say: 'a new fid: refused if in use', weight: 2 },
+        { at: 'def:closefid', say: 'the last reference destroys it', weight: 1 },
+      ],
+    },
+    'req.c': {
+      summary: 'Reqs: outstanding requests by tag, so Tflush can find them.',
+      digest: 'ef02688833ed',
+      important: [{ at: 'def:allocreq', say: 'a new tag: refused if in use', weight: 1 }],
+    },
+    'intmap.c': {
+      summary: 'Intmap: a hash table from ulong to pointer, locked, used for fids and tags.',
+      digest: 'a5a371ebb4c7',
+      important: [
+        { at: 'type:Intmap', say: 'buckets of Intlists under a RWLock', weight: 2 },
+        { at: 'def:caninsertkey', say: 'insert unless present: atomically', weight: 2 },
+        { at: 'def:lookupkey', weight: 1 },
+      ],
+    },
+    'post.c': {
+      summary: 'A server posted in /srv and mounted: a pipe, one end to srv(), the other mounted by the kernel.',
+      digest: '8d0f716d8f9d',
+      important: [
+        { at: 'def:_postmountsrv', say: 'the pipe, the post, the forked server', weight: 3 },
+        { at: 'comment:"Otherwise the mount hangs forever"', say: 'why the fds are closed before mounting', weight: 2 },
+      ],
+    },
+    'listen.c': {
+      summary: 'A server on the network: announce, listen, a srv() per incoming connection.',
+      digest: '51437287f951',
+      important: [
+        { at: 'def:_listensrv', weight: 1 },
+        { at: 'code:"listenproc(void *v)"', say: 'accept a call, fork a server for it', weight: 2 },
+      ],
+    },
+    'rfork.c': {
+      summary: 'postmountsrv and listensrv for programs without libthread: the server forked by rfork.',
+      digest: '29a3332b9e0d',
+      important: [{ at: 'def:postmountsrv', say: 'the usual start of a file server', weight: 2 }],
+    },
+    'thread.c': {
+      summary: 'The same for libthread programs: the server started as a proc (procrfork).',
+      digest: '0f39af8907ce',
+      capitals: [{ at: 'def:threadpostmountsrv', say: 'a threaded file server started' }],
+    },
+    'auth.c': {
+      summary: 'The auth file (Tauth): the 9P authentication conversation relayed to factotum.',
+      digest: '2bf04163406b',
+      important: [
+        { at: 'def:auth9p', say: 'Tauth: an afid talking to factotum', weight: 2 },
+        { at: 'def:authattach', say: 'Tattach allowed only once authenticated', weight: 2 },
+      ],
+    },
+    'dirread.c': {
+      summary: 'Directory reads for servers without a Tree: a generator function called per entry.',
+      digest: '4f38fc27be45',
+      important: [{ at: 'def:dirread9p', say: 'stat entries packed until the count is full', weight: 2 }],
+    },
+    'parse.c': {
+      summary: "Control messages parsed: a write's text split into fields and looked up in a Cmdtab.",
+      digest: '91a229059885',
+      important: [
+        { at: 'def:parsecmd', weight: 1 },
+        { at: 'def:lookupcmd', say: 'the command and its argument count checked', weight: 1 },
+      ],
+    },
+    'uid.c': {
+      summary: 'Permission checks, simplistic: each user is the leader of her own group.',
+      digest: '33f2607a632e',
+    },
+    'util.c': {
+      summary: 'readstr and readbuf: answer a Tread from a string or buffer at the offset.',
+      digest: 'ac86a96ca62c',
+      important: [{ at: 'def:readstr', say: 'the usual Tread of a small file', weight: 1 }],
+    },
+    'mem.c': {
+      summary: 'malloc, realloc, strdup that abort on failure.',
+      digest: '2667d31831aa',
+    },
+    'ramfs.c': {
+      summary: 'The example server: a RAM file system, files as byte arrays in a File tree.',
+      digest: '4b210866815a',
+      important: [
+        { at: 'code:"Srv fs = {"', say: 'the server: four callbacks, the Tree does the rest', weight: 3 },
+        { at: 'def:fsread', say: 'a read answered and respond called', weight: 2 },
+        { at: 'def:fswrite', say: 'the array grown', weight: 1 },
+      ],
+    },
+    'ftest.c': {
+      summary: 'An old test of File trees, from an earlier API (mktree, fcreate): does not build.',
+      digest: '71244176e553',
+    },
+  },
+  skeletons: [
+    {
+      name: 'A 9P file server: from a message to a callback and back',
+      bones: [
+        { at: 'rfork.c:def:postmountsrv', role: 'the start: post, mount, fork the loop' },
+        { at: 'post.c:def:_postmountsrv', role: 'a pipe: the kernel on one end' },
+        { at: 'srv.c:def:srv', role: 'the loop: a Req per message' },
+        { at: 'srv.c:def:sread', role: 'a T-message checked, then the callback' },
+        { at: 'ramfs.c:def:fsread', role: "the program's code: the file's bytes" },
+        { at: 'srv.c:def:respond', role: 'the R-message built and written' },
+        { at: 'file.c', role: 'a File tree: walks and directories for free' },
+      ],
+      joints: [
+        { from: 'rfork.c:def:postmountsrv', to: 'post.c:def:_postmountsrv', say: 'rforker' },
+        { from: 'post.c:def:_postmountsrv', to: 'srv.c:def:srv', say: 'in the forked process' },
+        { from: 'srv.c:def:srv', to: 'srv.c:def:sread', say: 'a Tread' },
+        { from: 'srv.c:def:sread', to: 'ramfs.c:def:fsread', say: 'srv->read(r): a function pointer' },
+        { from: 'ramfs.c:def:fsread', to: 'srv.c:def:respond', say: 'the data, or an error' },
+        { from: 'srv.c:def:sread', to: 'file.c', say: 'directories read from the Tree' },
+      ],
+    },
+    {
+      name: "srv.c: the dispatch, both ways",
+      bones: [
+        { at: 'srv.c:def:getreq', role: 'a message read into a Req' },
+        { at: 'srv.c:def:srv', role: 'the switch on the T type' },
+        { at: 'srv.c:def:swalk', role: 'an s-function: checks, then the callback' },
+        { at: 'srv.c:def:respond', role: 'the switch on the reply: r-functions' },
+        { at: 'srv.c:def:rwalk', role: 'an r-function: bookkeeping after' },
+        { at: 'fid.c:def:lookupfid', role: 'fids looked up for every message' },
+      ],
+      joints: [
+        { from: 'srv.c:def:getreq', to: 'srv.c:def:srv', say: 'each Req' },
+        { from: 'srv.c:def:srv', to: 'srv.c:def:swalk', say: 'Twalk' },
+        { from: 'srv.c:def:swalk', to: 'fid.c:def:lookupfid', say: 'the fid' },
+        { from: 'srv.c:def:swalk', to: 'srv.c:def:respond', say: 'via srv->walk, or at once on error' },
+        { from: 'srv.c:def:respond', to: 'srv.c:def:rwalk', say: 'the Twalk case' },
+      ],
+    },
+    {
+      name: 'file.c: a tree of Files',
+      bones: [
+        { at: 'file.c:def:alloctree', role: 'a Tree and its root' },
+        { at: 'file.c:def:createfile', role: 'a File added under a directory' },
+        { at: 'file.c:def:walkfile', role: 'a path followed' },
+        { at: 'file.c:def:opendirfile', role: 'a directory listed' },
+        { at: 'file.c:def:removefile', role: 'a File removed' },
+        { at: 'file.c:def:closefile', role: 'a reference dropped' },
+      ],
+      joints: [
+        { from: 'file.c:def:alloctree', to: 'file.c:def:createfile', say: 'the root to add under' },
+        { from: 'file.c:def:walkfile', to: 'file.c:def:closefile', say: 'parents released' },
+        { from: 'file.c:def:removefile', to: 'file.c:def:closefile', say: 'the last reference' },
+      ],
+    },
+    {
+      name: 'intmap.c: a locked hash table',
+      bones: [
+        { at: 'intmap.c:type:Intmap', role: 'buckets and a lock' },
+        { at: 'intmap.c:def:hashid', role: 'the bucket' },
+        { at: 'intmap.c:def:llookup', role: 'the link to a key' },
+        { at: 'intmap.c:def:caninsertkey', role: 'insert if absent' },
+        { at: 'intmap.c:def:deletekey', role: 'remove, returning the value' },
+      ],
+      joints: [
+        { from: 'intmap.c:def:caninsertkey', to: 'intmap.c:def:llookup', say: 'present?' },
+        { from: 'intmap.c:def:deletekey', to: 'intmap.c:def:llookup', say: 'the link' },
+        { from: 'intmap.c:def:llookup', to: 'intmap.c:def:hashid', say: 'the key' },
+      ],
+    },
+    {
+      name: 'auth.c: Tauth through factotum',
+      bones: [
+        { at: 'auth.c:type:Afid', role: 'the afid: an RPC to factotum' },
+        { at: 'auth.c:def:auth9p', role: 'Tauth: the afid opened' },
+        { at: 'auth.c:def:authread', role: "factotum's next message to the client" },
+        { at: 'auth.c:def:authwrite', role: "the client's message to factotum" },
+        { at: 'auth.c:def:authattach', role: 'Tattach: the afid must be done' },
+      ],
+      joints: [
+        { from: 'auth.c:def:auth9p', to: 'auth.c:type:Afid', say: 'made' },
+        { from: 'auth.c:def:authread', to: 'auth.c:type:Afid', say: 'the RPC' },
+        { from: 'auth.c:def:authwrite', to: 'auth.c:type:Afid', say: 'the RPC' },
+        { from: 'auth.c:def:authattach', to: 'auth.c:type:Afid', say: 'its AuthInfo' },
+      ],
+    },
+    skeletons.cmd('ramfs: a file system in memory', 'ramfs.c:def:main', [
+      ['file.c:def:alloctree', 'the Tree: walks and listings handled', 'first'],
+      ['rfork.c:def:postmountsrv', 'posted and mounted, served in a child', 'then'],
+      ['ramfs.c:def:fswrite', "a callback: the file's bytes kept", 'srv->write'],
+    ], main_role='main: the Tree, the flags (-s, -m, -a)'),
+    skeletons.cmd('ftest: a File tree built and dumped', 'ftest.c:def:main', [
+      ['file.c:def:createfile', 'what fcreate became', 'files'],
+    ], main_role='main: files created and removed'),
+  ],
+}

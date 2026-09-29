@@ -1,0 +1,479 @@
+// shells/rc/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// From Shell.nw's "Software architecture": rc is a compiler to bytecodes
+// and their interpreter; its data flow is characters -> tokens -> AST ->
+// bytecodes -> threads -> processes. The grammar, syn.y, is yacc's (not
+// a source here): yyparse calls yylex and, at each command, compile.
+// unix.c is the Unix port, not in the mkfile (plan9.c is built instead).
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "rc, Plan 9's shell (Duff, 1989): commands compiled to bytecodes (C functions named X...) and interpreted by threads.",
+  files: {
+    'main.c': {
+      summary: 'The entry: a bootstrap of bytecodes (. /rc/lib/rcmain) started, then the interpreter loop, forever.',
+      digest: 'ca108e6f2dc4',
+      capitals: [{ at: 'def:main', say: "rc's entry: bootstrap, then the bytecode loop" }],
+      important: [
+        { at: 'comment:fabricate bootstrap code', say: 'the first program: *=$*; . rcmain', weight: 2 },
+        { at: 'comment:initialize [[runq]] with bootstrap code', say: 'the bootstrap becomes the first thread', weight: 1 },
+        { at: 'comment:interpreter loop */', say: 'the virtual machine: call code[pc].f, forever', weight: 3 },
+      ],
+      links: [{ from: 'def:main', to: 'executils.c:def:start' }],
+    },
+    'exec.c': {
+      summary: 'The bytecodes: Xmark, Xword, Xassign, Xif, Xfor... each a C function working on the current thread.',
+      digest: '451452fdb4cb',
+      capitals: [{ at: 'def:Xrdcmds', say: 'read a command, compile it, run it as a thread' }],
+      important: [
+        { at: 'comment:Opcode routines', say: 'the instruction set, documented in one table', weight: 2 },
+        { at: 'def:Xmark', say: 'a new list on the stack: arguments are built there', weight: 2 },
+        { at: 'def:Xword', say: 'a word pushed: the operand follows inline', weight: 1 },
+        { at: 'def:Xassign', say: 'name = value: both lists popped', weight: 1 },
+        { at: 'def:Xdol', say: '$x: a variable read, its list pushed', weight: 1 },
+        { at: 'def:Xif', say: 'the status tested: a jump over the body', weight: 1 },
+        { at: 'def:Xfor', say: 'a loop as a jump back, a word per turn', weight: 1 },
+        { at: 'comment:re-execute Xrdcmds after codebuf runs', say: 'pc-- : this thread reads again once the command returns', weight: 3 },
+      ],
+      links: [
+        { from: 'def:Xrdcmds', to: 'executils.c:def:start' },
+        { from: 'def:Xrdcmds', to: 'executils.c:def:Xreturn' },
+      ],
+    },
+    'exec.h': {
+      summary: "The interpreter's data: a Thread (code, pc, argument stack, locals, redirections) and the run queue.",
+      digest: '9f9c5e4b7baa',
+      capitals: [{ at: 'type:Thread', say: 'a thread: code, pc, stack of lists, locals' }],
+      important: [
+        { at: 'type:Redir', say: 'redirections as a stack, undone on return', weight: 2 },
+        { at: 'type:List', say: 'the argument stack: a list of words per level', weight: 1 },
+        { at: 'type:Builtin', say: 'cd, ., eval...: a name and its C function', weight: 1 },
+      ],
+    },
+    'rc.h': {
+      summary: "rc's core types: the syntax tree, a bytecode (a function or an operand), words and variables.",
+      digest: '3cba1f50a9b9',
+      capitals: [
+        { at: 'type:Tree', say: "the AST yyparse builds" },
+        { at: 'type:Code', say: 'a bytecode: a function, an int or a string' },
+        { at: 'type:Var', say: 'a variable: a list of words, or a function' },
+      ],
+      important: [
+        { at: 'type:Word', say: 'everything in rc is a list of these', weight: 2 },
+        { at: 'def:NVAR', say: 'the globals: a hash table of 521', weight: 1 },
+        { at: 'def:GLOB', say: 'a glob character marked in the word itself', weight: 1 },
+        { at: 'comment:Please don', say: 'plan9.c or unix.c: the ifdefs kept to five', weight: 1 },
+      ],
+    },
+    'fns.h': {
+      summary: "The functions shared between rc's files, by stage: input and lexer, threads, status, compiler, glob.",
+      digest: '87dc63a172b1',
+      capitals: [{ at: 'def:yyparse', say: 'the parser, from syn.y (yacc)' }],
+      important: [
+        { at: 'def:compile', say: 'a tree to bytecodes', weight: 1 },
+        { at: 'def:start', say: 'a new thread on the run queue', weight: 1 },
+      ],
+    },
+    'io.h': {
+      summary: "rc's own buffered I/O: an Io reads from a fd or a string, writes to a fd or a growing string.",
+      digest: '4f199d023910',
+      capitals: [{ at: 'type:Io', say: "rc's buffered file (not libbio)" }],
+    },
+    'io.c': {
+      summary: 'The buffered I/O: bytes and runes read, output flushed; opencore makes a string readable as a script.',
+      digest: '7949841e3a30',
+      capitals: [{ at: 'def:rchr', say: 'a byte from a buffer, refilled when empty' }],
+      important: [
+        { at: 'def:openstr', say: 'output into a string: backquote, -c', weight: 1 },
+        { at: 'def:opencore', say: 'a string read as input: eval, -c', weight: 2 },
+        { at: 'def:flush', say: 'a buffer written out', weight: 1 },
+      ],
+    },
+    'getflags.h': {
+      summary: "Flag parsing's interface: flag[c] set by getflags, as rc's -c -e -i -x... read them.",
+      digest: '23bfde6d4b9a',
+      capitals: [{ at: 'def:flag', say: "rc's options: flag['x'] non-nil when set" }],
+    },
+    'getflags_.c': {
+      summary: "rc's own getopt: flags described by a string, each with its argument count, and the usage message.",
+      digest: '2f03ca976115',
+      important: [
+        { at: 'def:getflags', say: 'argv scanned: flag[c] points at its arguments', weight: 2 },
+        { at: 'def:usage', say: 'the message built from the flags string', weight: 1 },
+      ],
+    },
+    'input.c': {
+      summary: "The lexer's input: characters with one of lookahead, the prompt printed, the keywords' table.",
+      digest: 'b3ede3eb0b4c',
+      important: [
+        { at: 'def:nextc', say: 'the next character, peeked', weight: 2 },
+        { at: 'def:advance', say: 'the peeked character consumed', weight: 1 },
+        { at: 'comment:function [[getnext]]', say: 'the real read: prompt, the -v echo', weight: 2 },
+        { at: 'def:pprompt', say: 'the prompt: $prompt(1) or (2) inside a command', weight: 1 },
+        { at: 'def:klook', say: 'for, if, fn...: a word looked up as a keyword', weight: 1 },
+      ],
+    },
+    'lex.c': {
+      summary: "The lexer yylex, called by yacc's parser: words, quotes, $, redirections, and the free carets.",
+      digest: 'a207c4c9bbed',
+      capitals: [{ at: 'def:yylex', say: 'the next token for yyparse' }],
+      important: [
+        { at: 'def:skipnl', say: 'newlines skipped after | && ||: a command continues', weight: 1 },
+        { at: 'def:yyerror', say: 'a syntax error: the rest of the line dropped', weight: 1 },
+        { at: 'def:lastword', say: 'for the free caret: word word concatenated', weight: 2 },
+        { at: 'def:addtok', say: 'the token grows in a fixed buffer', weight: 1 },
+      ],
+    },
+    'tree.c': {
+      summary: "The AST's nodes, made by the grammar's actions (tree1..3) and fixed up by the mung functions.",
+      digest: '363fd96c9220',
+      important: [
+        { at: 'def:newtree', say: 'a node, remembered for freenodes', weight: 2 },
+        { at: 'def:tree3', say: 'a node with its three children', weight: 1 },
+        { at: 'def:simplemung', say: 'a simple command: its words as one argument list', weight: 1 },
+        { at: 'def:freenodes', say: 'the whole tree freed after compile', weight: 1 },
+      ],
+    },
+    'code.c': {
+      summary: 'The compiler: a tree walked, bytecodes emitted into codebuf; jumps patched when their target is known.',
+      digest: '10d3ee25798b',
+      capitals: [{ at: 'def:compile', say: 'a command tree to bytecodes, Xreturn last' }],
+      important: [
+        { at: 'comment:function [[outcode]]', say: 'the big switch: a node to its X instructions', weight: 3 },
+        { at: 'def:emitf', say: 'a bytecode: a C function pointer', weight: 1 },
+        { at: 'def:stuffdot', say: 'a forward jump patched to here', weight: 2 },
+        { at: 'comment:function [[codeswitch]]', say: 'switch: a chain of Xcase, each jumping on', weight: 1 },
+        { at: 'def:codefree', say: 'code is reference counted: shared by threads', weight: 1 },
+      ],
+      links: [{ from: 'def:compile', to: 'here.c:def:readhere' }],
+    },
+    'executils.c': {
+      summary: "The threads' machinery: start one, push and pop words and lists, redirections, return, errors.",
+      digest: '3cb872905018',
+      capitals: [{ at: 'def:start', say: 'a thread pushed on runq: bytecodes to run' }],
+      important: [
+        { at: 'def:pushlist', say: 'a new level on the argument stack', weight: 1 },
+        { at: 'def:poplist', say: 'a level popped, its words freed', weight: 1 },
+        { at: 'def:pushredir', say: 'a redirection, done at the next exec', weight: 1 },
+        { at: 'def:Xreturn', say: 'the thread ends: runq back to its caller', weight: 3 },
+        { at: 'def:Xerror1', say: 'an error unwinds threads up to an interactive one', weight: 2 },
+      ],
+    },
+    'simple.c': {
+      summary: 'A simple command run: a function, a builtin, or a program forked, exec-ed and waited for.',
+      digest: 'cfdb37e8207f',
+      capitals: [{ at: 'def:Xsimple', say: "the shell's essence: fork, exec, wait" }],
+      important: [
+        { at: 'comment:if argv0 is a function', say: 'functions first, then builtins, then $path', weight: 2 },
+        { at: 'def:exitnext', say: 'the last command: exec without fork', weight: 2 },
+        { at: 'def:doredir', say: 'the thread redirections applied, in the child', weight: 1 },
+        { at: 'def:execexec', say: 'exec itself: redirections, then Execute', weight: 1 },
+        { at: 'def:execcmds', say: '. and eval: a new reading thread (Xrdcmds)', weight: 1 },
+      ],
+      links: [
+        { from: 'def:Xsimple', to: 'processes.c:def:execforkexec' },
+        { from: 'def:Xsimple', to: 'plan9.c:def:Waitfor' },
+      ],
+    },
+    'processes.c': {
+      summary: 'The bytecodes that make processes: fork and exec, pipes, &, backquote, <{...}, subshells.',
+      digest: 'fdbff25f957b',
+      capitals: [{ at: 'def:execforkexec', say: 'fork; the child execs the command' }],
+      important: [
+        { at: 'def:Execute', say: 'exec tried along $path', weight: 2 },
+        { at: 'def:Xpipe', say: 'a | b: two children, one pipe', weight: 2 },
+        { at: 'def:Xbackq', say: '`{...}: a child, its output split into words', weight: 1 },
+        { at: 'def:Xasync', say: '&: a child not waited for, $apid', weight: 1 },
+        { at: 'def:addwaitpid', say: 'the children rc must wait for', weight: 1 },
+      ],
+    },
+    'builtins.c': {
+      summary: 'The builtins, run inside rc: cd, ., eval, exit, whatis, shift, wait, flag, rfork, finit.',
+      digest: '4aa7f42c67b6',
+      important: [
+        { at: 'def:builtins', say: 'the table Xsimple searches', weight: 2 },
+        { at: 'def:execcd', say: 'cd: in rc itself, or the child would chdir', weight: 2 },
+        { at: 'def:execdot', say: '. file: a new thread reading the file (rcmain)', weight: 3 },
+        { at: 'def:execwhatis', say: 'what a name is: variable, function, builtin, file', weight: 1 },
+        { at: 'def:execeval', say: 'eval: its words read as a script', weight: 1 },
+      ],
+    },
+    'here.c': {
+      summary: 'Here documents: the lines after the command read into a temporary file, $variables substituted.',
+      digest: '6d48503412b0',
+      important: [
+        { at: 'def:heredoc', say: 'seen by the parser: a here doc to read later', weight: 2 },
+        { at: 'def:readhere', say: 'after the command: its lines, until the tag', weight: 2 },
+        { at: 'comment:function [[psubst]]', say: '$name replaced inside the document', weight: 1 },
+      ],
+    },
+    'glob.c': {
+      summary: "Globbing: *, ? and [...] matched against directories, the matches sorted; marked with the GLOB byte.",
+      digest: '289e2322ba28',
+      important: [
+        { at: 'def:globlist', say: 'every word of the argument list globbed', weight: 2 },
+        { at: 'def:glob', say: 'a pattern to its matches, sorted', weight: 1 },
+        { at: 'def:globdir', say: 'one path element at a time, directory by directory', weight: 2 },
+        { at: 'def:match', say: 'the matcher, UTF-aware', weight: 1 },
+        { at: 'def:deglob', say: 'the GLOB marks removed: a literal word', weight: 1 },
+      ],
+    },
+    'plan9.c': {
+      summary: 'What is Plan 9 in rc: variables to and from /env, functions as fn#name, notes, wait, directories.',
+      digest: 'e6cab13d184a',
+      important: [
+        { at: 'def:Vinit', say: 'the variables read from /env at start', weight: 2 },
+        { at: 'def:Updenv', say: 'changed variables written back to /env before exec', weight: 2 },
+        { at: 'def:Xrdfn', say: 'functions read from /env/fn#name', weight: 1 },
+        { at: 'def:Waitfor', say: 'wait until that child: $status set', weight: 2 },
+        { at: 'def:notifyf', say: 'a note (interrupt) becomes a trap', weight: 1 },
+        { at: 'def:Exit', say: 'rc exits with its status as the exit string', weight: 1 },
+      ],
+    },
+    'unix.c': {
+      summary: "The Unix port's system functions (environ, signals, wait): not built here, plan9.c's twin.",
+      digest: '8518f3009175',
+      important: [
+        { at: 'def:Vinit', say: "environ read, fn definitions parsed", weight: 1 },
+        { at: 'def:mkenv', say: 'environ rebuilt for exec', weight: 1 },
+      ],
+    },
+    'pcmd.c': {
+      summary: "A tree printed back as rc source (%t): functions' bodies, whatis, -x.",
+      digest: 'bba56dc03612',
+      important: [{ at: 'def:pcmd', say: 'the unparser: a switch on node types', weight: 2 }],
+    },
+    'pfnc.c': {
+      summary: "A thread's current bytecode printed by name, for the -r debugging flag.",
+      digest: 'ffd20a021cf1',
+      important: [{ at: 'def:fname', say: 'function pointer to name', weight: 1 }],
+    },
+    'fmt.c': {
+      summary: "rc's own printf, pfmt: %v a word list, %t a tree, %q a quoted word.",
+      digest: 'df0011e0caa0',
+      important: [
+        { at: 'def:pfmt', say: 'the format loop', weight: 2 },
+        { at: 'comment:function [[pquo]]', say: "a word quoted rc's way: '' doubled", weight: 1 },
+      ],
+    },
+    'var.c': {
+      summary: 'Variables: a global hash table, and local ones on the thread for function calls.',
+      digest: '5626900b4cf6',
+      important: [
+        { at: 'def:vlook', say: 'locals first, then the globals', weight: 2 },
+        { at: 'def:setvar', say: 'a variable given a list of words', weight: 1 },
+      ],
+    },
+    'words.c': {
+      summary: "Word lists, rc's only data type: made, copied, counted, freed.",
+      digest: '41ca7d7ecdbe',
+      important: [{ at: 'def:count', say: '$#x: a list counted', weight: 1 }],
+    },
+    'status.c': {
+      summary: '$status: set, read, and tested (true when empty or every element is 0 or empty).',
+      digest: '0721592e4f42',
+      important: [{ at: 'def:truestatus', say: 'what if and && test', weight: 2 }],
+    },
+    'trap.c': {
+      summary: 'Notes turned into traps: a function named after the note (sigint) run at the next bytecode.',
+      digest: '5a5320c5ce93',
+      important: [{ at: 'def:dotrap', say: 'the trap function run as a new thread', weight: 2 }],
+    },
+    'path.c': {
+      summary: 'The $path search, skipped for names that are already paths (/, #, ./, ../).',
+      digest: '5264dd898637',
+    },
+    'utils.c': {
+      summary: 'Small helpers: emalloc, efree, integers to strings.',
+      digest: '544faf3db092',
+    },
+    'error.c': {
+      summary: 'Fatal errors: panic prints and aborts.',
+      digest: 'cd1570c2ab0f',
+    },
+    'globals.c': {
+      summary: "rc's globals: the run queue, the compiler's buffer, the prompt.",
+      digest: 'b52d04986b05',
+      important: [{ at: 'def:runq', say: 'the current thread, top of the stack', weight: 2 }],
+    },
+    'env.c': {
+      summary: 'Empty now: its environment functions moved to plan9.c.',
+      digest: 'bd7e0b4fde4d',
+    },
+  },
+  skeletons: [
+    {
+      name: 'rc: read, compile, interpret (Shell.nw, control flow)',
+      bones: [
+        { at: 'main.c:def:main', role: 'bootstrap, then the loop: code[pc].f()' },
+        { at: 'executils.c:def:start', role: 'a thread pushed on runq' },
+        { at: 'exec.c:def:Xrdcmds', role: 'a bytecode: one command read and started' },
+        { at: 'lex.c:def:yylex', role: 'tokens, for yyparse (syn.y)' },
+        { at: 'input.c:def:nextc', role: 'characters: terminal or script' },
+        { at: 'code.c:def:compile', role: 'the tree to bytecodes in codebuf' },
+        { at: 'simple.c:def:Xsimple', role: 'a command run: function, builtin, program' },
+        { at: 'processes.c:def:execforkexec', role: 'fork, and exec in the child' },
+        { at: 'executils.c:def:Xreturn', role: 'the command done: back to the reader' },
+      ],
+      joints: [
+        { from: 'main.c:def:main', to: 'executils.c:def:start', say: 'the bootstrap code' },
+        { from: 'main.c:def:main', to: 'exec.c:def:Xrdcmds', say: 'dispatched as a bytecode' },
+        { from: 'exec.c:def:Xrdcmds', to: 'lex.c:def:yylex', say: 'yyparse pulls tokens' },
+        { from: 'lex.c:def:yylex', to: 'input.c:def:nextc', say: 'a character' },
+        { from: 'exec.c:def:Xrdcmds', to: 'code.c:def:compile', say: 'the tree, at a newline' },
+        { from: 'code.c:def:compile', to: 'executils.c:def:start', say: 'codebuf: a new thread' },
+        { from: 'main.c:def:main', to: 'simple.c:def:Xsimple', say: 'dispatched' },
+        { from: 'simple.c:def:Xsimple', to: 'processes.c:def:execforkexec', say: 'the arguments, globbed' },
+        { from: 'executils.c:def:Xreturn', to: 'exec.c:def:Xrdcmds', say: 'runq popped: read again' },
+      ],
+    },
+    skeletons.parts("rc's files: a compiler and a virtual machine", [
+      ['input.c', 'characters, prompts, keywords'],
+      ['lex.c', 'the lexer (the parser is syn.y)'],
+      ['tree.c', 'the AST built by the grammar'],
+      ['code.c', 'the compiler: AST to bytecodes'],
+      ['main.c', 'the virtual machine loop'],
+      ['exec.c', 'the bytecodes'],
+      ['simple.c', 'a command run'],
+      ['processes.c', 'processes: fork, pipes, backquote'],
+      ['plan9.c', 'the OS: /env, notes, wait'],
+    ], [
+      ['input.c', 'lex.c', 'characters'],
+      ['lex.c', 'tree.c', 'tokens, through yyparse'],
+      ['tree.c', 'code.c', 'the tree'],
+      ['code.c', 'main.c', 'bytecodes, in a thread'],
+      ['main.c', 'exec.c', 'each instruction called'],
+      ['exec.c', 'simple.c', 'Xsimple'],
+      ['simple.c', 'processes.c', 'fork and exec'],
+      ['processes.c', 'plan9.c', 'wait, the environment'],
+    ]),
+    skeletons.chain('main.c: the bootstrap and the loop', [
+      ['main.c:def:main', 'flags, then the bootstrap built', ''],
+      ['main.c:comment:fabricate bootstrap code', '*=$*; . rcmain; exit', 'bytecodes by hand'],
+      ['executils.c:def:start', 'the first thread', 'started'],
+      ['main.c:comment:interpreter loop */', 'code[pc++].f(), traps between', 'then'],
+    ]),
+    skeletons.chain('exec.c: the instructions, on a stack of lists', [
+      ['exec.c:def:Xmark', 'a new list opened', ''],
+      ['exec.c:def:Xword', 'a word pushed on it', 'filled'],
+      ['exec.c:def:Xassign', 'or consumed: name = value', 'popped'],
+      ['exec.c:def:Xif', 'control: $status tested, a jump', 'then'],
+      ['exec.c:def:Xrdcmds', 'the reading instruction', 'loops'],
+    ]),
+    skeletons.chain('code.c: a tree compiled', [
+      ['code.c:def:compile', 'codebuf allocated, Xreturn appended', ''],
+      ['code.c:comment:function [[outcode]]', 'recursive: a node to instructions', 'the tree'],
+      ['code.c:def:emitf', 'an instruction appended', 'emits'],
+      ['code.c:def:stuffdot', 'a jump patched to here', 'forward jumps'],
+      ['here.c:def:readhere', 'here documents read after', 'then'],
+    ]),
+    skeletons.chain('executils.c: threads started and ended', [
+      ['executils.c:def:start', 'a thread: code, pc, locals, redirections', ''],
+      ['executils.c:def:pushlist', 'the argument stack grows', 'runs'],
+      ['executils.c:def:pushredir', 'a redirection recorded', 'redirects'],
+      ['executils.c:def:Xreturn', 'popped: runq its caller', 'ends'],
+      ['executils.c:def:Xerror1', 'on error: unwound to an interactive thread', 'or fails'],
+    ]),
+    skeletons.chain('simple.c: a simple command', [
+      ['simple.c:def:Xsimple', 'arguments globbed, the name resolved', ''],
+      ['simple.c:comment:function [[execfunc]]', 'a function: its body a new thread', 'a function'],
+      ['builtins.c:def:builtins', 'a builtin: called in rc', 'a builtin'],
+      ['processes.c:def:execforkexec', 'a program: fork', 'otherwise'],
+      ['simple.c:def:execexec', 'in the child: redirections, exec', 'child'],
+      ['plan9.c:def:Waitfor', 'the parent waits: $status', 'parent'],
+    ]),
+    skeletons.chain('processes.c: children', [
+      ['processes.c:def:execforkexec', 'fork, the child execs', ''],
+      ['processes.c:def:Execute', 'exec along $path', 'child'],
+      ['processes.c:def:Xpipe', 'a pipe: two threads in two children', 'or'],
+      ['processes.c:def:Xbackq', 'backquote: output read back as words', 'or'],
+      ['processes.c:def:addwaitpid', 'each child remembered to wait for', 'records'],
+    ]),
+    skeletons.chain('builtins.c: commands rc runs itself', [
+      ['builtins.c:def:builtins', 'the table: name, function', ''],
+      ['builtins.c:def:execcd', 'cd: must change rc itself', 'cd'],
+      ['builtins.c:def:execdot', '.: a file read as commands', '.'],
+      ['simple.c:def:execcmds', 'a reading thread started', 'runs'],
+      ['builtins.c:def:execwhatis', 'whatis: what a name is', 'whatis'],
+    ]),
+    skeletons.chain('lex.c: tokens', [
+      ['lex.c:def:yylex', 'the next token for yyparse', ''],
+      ['input.c:def:nextc', 'a character peeked', 'reads'],
+      ['lex.c:def:skipnl', 'continued lines', 'skips'],
+      ['lex.c:def:addtok', 'the word grows', 'builds'],
+      ['input.c:def:klook', 'a keyword?', 'checks'],
+    ]),
+    skeletons.chain('input.c: characters and prompts', [
+      ['input.c:def:nextc', 'one character of lookahead', ''],
+      ['input.c:comment:function [[getnext]]', 'the real read, on the thread file', 'refills'],
+      ['input.c:def:pprompt', 'the prompt printed', 'prompts'],
+      ['io.c:def:rchr', 'bytes from the buffer', 'reads'],
+    ]),
+    skeletons.chain('tree.c: the AST', [
+      ['tree.c:def:newtree', 'a node, on the free list', ''],
+      ['tree.c:def:tree3', 'a node with children', 'made by'],
+      ['tree.c:def:simplemung', 'a command: words as arguments', 'fixed up'],
+      ['tree.c:def:freenodes', 'all freed after compiling', 'finally'],
+    ]),
+    skeletons.chain('here.c: here documents', [
+      ['here.c:def:heredoc', 'the parser notes <<tag', ''],
+      ['here.c:def:readhere', 'compile reads the lines', 'later'],
+      ['here.c:comment:function [[psubst]]', '$names substituted', 'each line'],
+    ]),
+    skeletons.chain('glob.c: patterns to file names', [
+      ['glob.c:def:globlist', 'the argument list, each word', ''],
+      ['glob.c:def:glob', 'a pattern: its matches sorted', 'a word'],
+      ['glob.c:def:globdir', 'directory by directory', 'walks'],
+      ['glob.c:def:match', 'a name against the pattern', 'tests'],
+    ]),
+    skeletons.chain('plan9.c: rc and the system', [
+      ['plan9.c:def:Vinit', '/env read into variables', ''],
+      ['plan9.c:def:Updenv', 'variables written back to /env', 'before exec'],
+      ['plan9.c:def:Waitfor', 'wait: $status', 'after fork'],
+      ['plan9.c:def:notifyf', 'a note: a trap pending', 'on interrupt'],
+      ['plan9.c:def:Exit', 'exits with the status', 'at the end'],
+    ]),
+    skeletons.chain('unix.c: the same on Unix', [
+      ['unix.c:def:Vinit', 'environ read', ''],
+      ['unix.c:def:Updenv', 'environ rebuilt', 'before exec'],
+      ['unix.c:def:Waitfor', 'wait(2)', 'after fork'],
+    ]),
+    skeletons.chain('getflags_.c: the flags', [
+      ['getflags_.c:def:getflags', 'argv scanned against the flags string', ''],
+      ['getflags_.c:comment:function [[scanflag]]', 'a flag and its arguments', 'each'],
+      ['getflags_.c:def:usage', 'the usage message', 'on error'],
+    ]),
+    skeletons.chain('io.c: buffered I/O', [
+      ['io.c:def:openfd', 'an Io on a fd', ''],
+      ['io.c:def:rchr', 'a byte read, refilled', 'reads'],
+      ['io.c:def:flush', 'output written', 'writes'],
+      ['io.c:def:closeio', 'closed', 'ends'],
+    ]),
+    skeletons.chain('fmt.c: printing', [
+      ['fmt.c:def:pfmt', 'the format walked', ''],
+      ['fmt.c:def:pwrd', 'a word, quoted if needed', '%q'],
+      ['fmt.c:def:pchr', 'a character into the Io', 'each'],
+    ]),
+    skeletons.chain('pcmd.c: a tree printed as rc', [
+      ['pcmd.c:def:pcmd', 'a node printed', ''],
+      ['pcmd.c:def:pdeglob', 'words without their GLOB marks', 'words'],
+      ['fmt.c:def:pfmt', 'through %t', 'prints'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'How rc runs a command',
+      stops: [
+        { at: 'main.c:def:main', say: 'A bootstrap of bytecodes, then the loop that calls them.' },
+        { at: 'builtins.c:def:execdot', say: 'The bootstrap runs rcmain with ., which starts a thread reading commands.' },
+        { at: 'exec.c:def:Xrdcmds', say: 'yyparse reads one command; compile turns it into a new thread.' },
+        { at: 'lex.c:def:yylex', say: 'Words, quotes and the free caret: the lexer.' },
+        { at: 'code.c:def:compile', say: 'The tree to bytecodes: outcode is one big switch.' },
+        { at: 'simple.c:def:Xsimple', say: 'A function, a builtin, or fork, exec and wait.' },
+        { at: 'processes.c:def:Xpipe', say: 'A pipe: two children, each a thread of the same code.' },
+        { at: 'executils.c:def:Xreturn', say: 'The command done, the reading thread resumes.' },
+      ],
+    },
+  ],
+  views: [{ name: 'rc and its tiny ancestors', files: ['./', '../minishell/', '../sh/'] }],
+}

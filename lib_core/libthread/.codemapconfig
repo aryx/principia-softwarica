@@ -1,0 +1,363 @@
+// lib_core/libthread/: what the code map says of it (tinybox codemap;
+// its manual: ~/github/ocaml-elm-playground/docs/manual/codemap.md). The
+// book: Libcore.nw's threads chapter ("Software architecture", its
+// second one); the public interface is include/ipc/thread.h (Channel,
+// Alt), described with include/.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libthread, after Alef: cooperative threads inside procs (rfork'd processes sharing memory), talking over channels with alt; rio and acme are written with it.",
+  files: {
+    'threadimpl.h': {
+      summary: 'The private structures: a Proc (a real process) holds Threads (coroutines, each a jmp_buf and a stack), its ready queue, and the locking rules.',
+      digest: 'de9d32814bab',
+      capitals: [
+        { at: 'code:"struct Proc"', say: 'a process: its threads, its ready queue, its scheduler jmp_buf' },
+        { at: 'code:"struct Thread"', say: 'a coroutine: a jmp_buf, a stack, a state' },
+      ],
+      important: [
+        { at: 'comment:"Some notes on locking"', say: 'the lock order, and who may free a Thread', weight: 3 },
+        { at: 'code:"struct Tqueue"', say: 'the ready queue: asleep when empty', weight: 2 },
+        { at: 'code:"struct Rgrp"', say: 'threads waiting in a rendezvous, hashed by tag', weight: 1 },
+        { at: 'code:"struct Ioproc"', say: 'a proc lent to one blocking call at a time', weight: 1 },
+        { at: 'code:"enum state"', say: 'Dead, Running, Ready, Rendezvous', weight: 1 },
+      ],
+    },
+    'main.c': {
+      summary: "libthread's main: it replaces the program's, makes the first proc, and runs the user's threadmain in its first thread.",
+      digest: 'dad6a099cb03',
+      capitals: [{ at: 'def:main', say: "the real main: the program's is threadmain" }],
+      important: [
+        { at: 'code:"if(setjmp(_mainjmp))"', say: 'every new proc comes back here, forked, to run its scheduler', weight: 3 },
+        { at: 'code:"_sysfatal = _threadsysfatal"', say: "libc's hooks swapped for thread-aware versions", weight: 2 },
+        { at: 'code:"p = _newproc(mainlauncher"', say: 'the first proc, its thread about to call threadmain', weight: 2 },
+        { at: 'code:"threadmain(a->argc, a->argv)"', say: "the user's program begins", weight: 3 },
+        { at: 'def:_schedfork', say: 'a new proc: rfork(RFMEM), then the longjmp to main', weight: 2 },
+        { at: 'def:_schedexec', say: 'exec in a forked proc: procexec\'s helper', weight: 1 },
+      ],
+    },
+    'sched.c': {
+      summary: 'The scheduler: each proc runs its ready threads in turn, switching by setjmp/longjmp; with none ready, it sleeps in rendezvous.',
+      digest: '99f58f776463',
+      capitals: [{ at: 'def:_sched', say: 'the context switch: setjmp here, longjmp there' }],
+      important: [
+        { at: 'def:_schedinit', say: "the proc's loop: the thread that stopped, dealt with", weight: 3 },
+        { at: 'code:"while(setjmp(p->sched))"', say: 'every switch comes back through the proc', weight: 2 },
+        { at: 'code:"if(setjmp(t->sched)==0)"', say: "the running thread's registers saved", weight: 3 },
+        { at: 'code:"longjmp(t->sched, 1)"', say: 'the chosen thread resumed', weight: 2 },
+        { at: 'code:"while(rendezvous(q, 0)"', say: 'nothing ready: the whole proc sleeps in the kernel', weight: 2 },
+        { at: 'def:_threadready', say: 'a thread queued, the proc woken if asleep', weight: 2 },
+        { at: 'def:yield', weight: 1 },
+      ],
+    },
+    'channel.c': {
+      summary: 'Channels: send, recv and alt over one global lock; a waiting thread parks in a rendezvous until the other side copies its value.',
+      digest: '6b8e825dd734',
+      capitals: [
+        { at: 'def:alt', say: 'wait on several channels: the heart of it' },
+        { at: 'def:chancreate', say: 'a channel: element size, buffer size' },
+        { at: 'def:send', say: 'send (recv beside it): one-entry alts' },
+      ],
+      important: [
+        { at: 'comment:"The point of going splhi here"', say: 'notes held off while chanlock is held', weight: 2 },
+        { at: 'code:"if(nrand(++n) == 0)"', say: 'among the ready entries, one chosen at random: fairness', weight: 3 },
+        { at: 'comment:"enqueue on all channels open for us"', say: 'nothing ready: wait on all of them', weight: 2 },
+        { at: 'code:"r = _threadrendezvous(&c, 0)"', say: 'asleep until a partner hands over the channel', weight: 3 },
+        { at: 'def:runop', say: 'send and recv are alt with one entry', weight: 2 },
+        { at: 'def:altexec', weight: 1 },
+        { at: 'def:altcopy', say: 'the value copied from sender to receiver', weight: 1 },
+        { at: 'def:chanclose', weight: 1 },
+      ],
+      links: [
+        { from: 'def:send', to: 'def:runop' },
+        { from: 'def:recv', to: 'def:runop' },
+        { from: 'def:runop', to: 'def:alt' },
+      ],
+    },
+    'create.c': {
+      summary: 'Threads and procs created: threadcreate adds a coroutine to this proc; proccreate asks the scheduler to rfork a new one.',
+      digest: 'ff7404e02457',
+      capitals: [
+        { at: 'def:threadcreate', say: 'a new thread in this proc' },
+        { at: 'def:proccreate', say: 'a new proc (a process sharing memory)' },
+      ],
+      important: [
+        { at: 'def:newthread', say: 'a Thread: its stack, its jmp_buf aimed at f, made ready', weight: 3 },
+        { at: 'code:"memset(t->stk, 0xFE, stacksize)"', say: 'the stack painted: its high water seen by acid', weight: 1 },
+        { at: 'def:_newproc', say: 'a Proc with one thread, on the global list', weight: 2 },
+        { at: 'code:"p->newproc = _newproc"', say: 'not forked here: the scheduler does it, in _schedinit', weight: 2 },
+      ],
+    },
+    'arm.c': {
+      summary: "A new thread's stack on ARM: its jmp_buf's PC set to a launcher that calls f(arg), then threadexits.",
+      digest: 'c095ebacdb4f',
+      important: [
+        { at: 'code:"t->sched[JMPBUFPC]"', say: 'a thread is born as a longjmp into its launcher', weight: 2 },
+      ],
+    },
+    '386.c': {
+      summary: "A new thread's stack on x86: the same trick as arm.c, a jmp_buf aimed at a launcher.",
+      digest: 'e62c7f0be894',
+    },
+    'rendez.c': {
+      summary: "The threads' own rendezvous: two threads of any procs meet on a tag; the waiting one parks and the scheduler runs others.",
+      digest: '86a06770a416',
+      important: [
+        { at: 'def:_threadrendezvous', say: 'meet a waiting thread, or park until one comes', weight: 3 },
+        { at: 'comment:"Going to sleep here"', say: 'not the kernel: only this thread stops', weight: 2 },
+        { at: 'def:_threadbreakrendez', say: 'an interrupted thread pulled out', weight: 1 },
+      ],
+    },
+    'exit.c': {
+      summary: 'threadexits ends one thread (the proc ends with its last); threadexitsall kills every proc.',
+      digest: '8beb60f40a44',
+      capitals: [{ at: 'def:threadexits', say: 'a thread ends' }],
+      important: [
+        { at: 'def:threadexitsall', weight: 2 },
+        { at: 'comment:"avoid mallocs since malloc can post a note"', say: 'why the pids are copied onto the stack', weight: 1 },
+      ],
+    },
+    'exec.c': {
+      summary: 'procexec: exec from a thread, the exec done in a forked proc, its success told back through a close-on-exec pipe.',
+      digest: '30748f17ef9a',
+      important: [
+        { at: 'def:procexec', weight: 2 },
+        { at: 'comment:"We want procexec to behave like exec"', say: 'the pipe trick: EOF means the exec worked', weight: 2 },
+      ],
+    },
+    'note.c': {
+      summary: "Notes (Plan 9's signals) for threaded programs: handlers per process, and notes delayed while a channel lock is held.",
+      digest: '973994140117',
+      important: [
+        { at: 'def:threadnotify', weight: 1 },
+        { at: 'def:_threadnote', say: 'the note handler libthread installs', weight: 2 },
+        { at: 'def:_procsplhi', say: "'interrupts off' for notes, around chanlock", weight: 2 },
+      ],
+    },
+    'kill.c': {
+      summary: 'threadkill, threadint and their group forms: a thread marked to die, or pulled out of its rendezvous.',
+      digest: 'd093a2cb9b8a',
+    },
+    'id.c': {
+      summary: "A thread's identity: its id, group and name (seen in /proc by acid), and its private data slots.",
+      digest: 'd57c91294887',
+      important: [
+        { at: 'def:threadsetname', say: 'what ps and acid show', weight: 1 },
+        { at: 'def:tprivfree', say: 'a bug kept from Plan 9: privlock is never unlocked', weight: 2 },
+      ],
+    },
+    'globals.c': {
+      summary: 'The globals: the list of procs, and the current proc found through a per-process pointer.',
+      digest: '12a572a77c5c',
+      important: [{ at: 'def:_threadgetproc', say: 'the running Proc: per-process memory, not shared', weight: 2 }],
+    },
+    'lib.c': {
+      summary: "_threadmalloc (malloc or die) and the thread-aware sysfatal that libthread's main installs.",
+      digest: '0fdc5d4a62a2',
+    },
+    'debug.c': {
+      summary: '_threaddebug: tracing by class (scheduling, channels, rendezvous...), and the thread-aware assert.',
+      digest: '145ef11339ef',
+    },
+    'dial.c': {
+      summary: 'A dial that threads can use: the connection server and the network files, without the forks of libc\'s dial.',
+      digest: 'c55730e2b54b',
+      important: [{ at: 'def:_threaddial', say: "installed as libc's _dial by main", weight: 1 }],
+    },
+    'ref.c': {
+      summary: 'incref, decref: a Ref counter changed atomically (_xinc, _xdec).',
+      digest: 'b3b4c0ee3a92',
+    },
+    'chanprint.c': {
+      summary: 'chanprint: a formatted string sent on a channel (the string malloced by smprint).',
+      digest: 'a8be5918087f',
+    },
+    'ioproc.c': {
+      summary: 'Io procs: a proc kept to make blocking system calls, so the calling thread blocks alone, not its whole proc.',
+      digest: 'd13deb5d505d',
+      capitals: [{ at: 'def:ioproc', say: 'a proc for blocking calls' }],
+      important: [
+        { at: 'def:xioproc', say: "the proc's loop: a call received, run, answered", weight: 3 },
+        { at: 'code:"io->ret = io->op(&io->arg)"', say: 'the blocking call itself, in its own proc', weight: 2 },
+      ],
+    },
+    'iocall.c': {
+      summary: 'iocall: a call handed to an io proc over its channels, and its result waited for.',
+      digest: '62a3dfae5033',
+      important: [
+        { at: 'def:iocall', weight: 2 },
+        { at: 'comment:"If we get interrupted, we have to stick around"', say: 'interrupted: the io proc still needs its partner', weight: 1 },
+      ],
+    },
+    'ioopen.c': { summary: 'ioopen: open() through an io proc.', digest: '050756ad1e75' },
+    'ioclose.c': { summary: 'ioclose: close() through an io proc.', digest: 'acd0d5e75cf0' },
+    'ioread.c': { summary: 'ioread: read() through an io proc.', digest: 'a048c56f919f' },
+    'ioreadn.c': { summary: 'ioreadn: readn() through an io proc.', digest: 'be9eee1e5b74' },
+    'iowrite.c': { summary: 'iowrite: write() through an io proc.', digest: '8256b59a4fa1' },
+    'iosleep.c': { summary: 'iosleep: sleep() through an io proc.', digest: '39ef6ee46493' },
+    'iodial.c': { summary: 'iodial: dial() through an io proc.', digest: '4d19ec292a7b' },
+    'xincport.h': {
+      summary: 'Atomic increment and decrement done portably, under a lock (ARM includes it).',
+      digest: 'a17003c55175',
+    },
+    'xincarm.c': {
+      summary: "ARM's _xinc and _xdec: the portable, locked ones of xincport.h.",
+      digest: '8a970e82c9f6',
+    },
+    'xinc386.s': {
+      summary: "x86's _xinc and _xdec: one LOCK'd INCL or DECL each (assembly).",
+      digest: '4a8f3d6e2130',
+    },
+  },
+  skeletons: [
+    skeletons.parts('libthread: threads, the scheduler, channels', [
+      ['main.c', "the real main: the first proc, then threadmain"],
+      ['create.c', 'threads and procs created'],
+      ['sched.c', 'each proc switching among its threads'],
+      ['channel.c', 'send, recv, alt: how threads talk'],
+      ['rendez.c', 'where a waiting thread parks'],
+      ['ioproc.c', 'a proc lent for blocking calls'],
+      ['threadimpl.h', 'Proc, Thread: the private structures'],
+    ], [
+      ['main.c', 'create.c', 'the first proc'],
+      ['create.c', 'sched.c', 'a thread ready'],
+      ['channel.c', 'rendez.c', 'nothing ready: wait'],
+      ['rendez.c', 'sched.c', 'another thread runs'],
+      ['ioproc.c', 'channel.c', 'the call and its result'],
+      ['sched.c', 'threadimpl.h', 'written with'],
+    ]),
+    skeletons.cmd("A threaded program starts: libthread's main to threadmain", 'main.c:def:main', [
+      ['create.c:def:_newproc', 'the first proc, with one thread', 'mainlauncher'],
+      ['sched.c:def:_schedinit', "the proc's scheduler loop", 'the proc'],
+      ['sched.c:def:_sched', 'the thread resumed by longjmp', 'next ready'],
+      ['main.c:def:mainlauncher', "in the first thread: the user's threadmain", 'runs'],
+    ], main_role='main: rfork(RFREND), hooks swapped, the first proc made'),
+    skeletons.chain('A thread switch: blocked on a channel', [
+      ['channel.c:def:recv', 'recv: an alt of one entry', ''],
+      ['channel.c:def:alt', 'no partner ready: enqueued on the channel', 'runop'],
+      ['rendez.c:def:_threadrendezvous', 'the thread parked on its tag', 'wait'],
+      ['sched.c:def:_sched', 'setjmp this thread, longjmp the proc', 'switch'],
+      ['sched.c:def:_schedinit', 'the next ready thread chosen', 'the proc'],
+      ['sched.c:def:_threadready', 'woken by a sender: ready again', 'later'],
+    ]),
+    skeletons.chain('proccreate: a new proc, forked by the scheduler', [
+      ['create.c:def:proccreate', 'a proc wanted', ''],
+      ['create.c:def:procrfork', 'p->newproc set, then yield', 'rfork flags'],
+      ['sched.c:def:_schedinit', 'the scheduler sees newproc', '_sched'],
+      ['main.c:def:_schedfork', 'rfork(RFMEM): the child longjmps into main', 'forks'],
+      ['main.c:def:main', 'the child, back in main, runs _schedinit', 'longjmp'],
+    ]),
+    skeletons.chain('An io proc: a blocking call off the thread', [
+      ['ioproc.c:def:ioproc', 'a proc and two channels', ''],
+      ['iocall.c:def:iocall', 'the call sent on the channel', 'used by ioread...'],
+      ['ioproc.c:def:xioproc', 'the call run in the io proc; the result sent back', 'the call'],
+    ]),
+    {
+      name: 'channel.c: alt and its helpers',
+      bones: [
+        { at: 'channel.c:def:chancreate', role: 'a channel: element size, buffer' },
+        { at: 'channel.c:def:send', role: 'send: one entry' },
+        { at: 'channel.c:def:runop', role: 'one op as an alt' },
+        { at: 'channel.c:def:alt', role: 'ready entries? one at random; else wait' },
+        { at: 'channel.c:def:altexec', role: 'the op done, the partner woken' },
+        { at: 'channel.c:def:altcopy', role: 'the bytes moved' },
+      ],
+      joints: [
+        { from: 'channel.c:def:send', to: 'channel.c:def:runop', say: 'the value' },
+        { from: 'channel.c:def:runop', to: 'channel.c:def:alt', say: 'an Alt array' },
+        { from: 'channel.c:def:alt', to: 'channel.c:def:altexec', say: 'the chosen entry' },
+        { from: 'channel.c:def:altexec', to: 'channel.c:def:altcopy', say: 'the value' },
+      ],
+    },
+    {
+      name: 'create.c: a thread and a proc made',
+      bones: [
+        { at: 'create.c:def:threadcreate', role: 'in this proc' },
+        { at: 'create.c:def:proccreate', role: 'in a new proc' },
+        { at: 'create.c:def:newthread', role: 'stack, jmp_buf, ready' },
+        { at: 'create.c:def:_newproc', role: 'a Proc on the global list' },
+        { at: 'arm.c:def:_threadinitstack', role: 'the jmp_buf aimed at the launcher' },
+      ],
+      joints: [
+        { from: 'create.c:def:threadcreate', to: 'create.c:def:newthread', say: 'f, arg' },
+        { from: 'create.c:def:proccreate', to: 'create.c:def:_newproc', say: 'via procrfork' },
+        { from: 'create.c:def:_newproc', to: 'create.c:def:newthread', say: 'its first thread' },
+        { from: 'create.c:def:newthread', to: 'arm.c:def:_threadinitstack', say: 'the stack' },
+      ],
+    },
+    {
+      name: 'dial.c: a dial string to a connection, no fork',
+      bones: [
+        { at: 'dial.c:def:_threaddial', role: '/net, then /net.alt' },
+        { at: 'dial.c:code:"_dial_string_parse(char *str"', role: '[/net/]proto!dest split' },
+        { at: 'dial.c:code:"csdial(DS *ds)"', role: 'the connection server asked for clones' },
+        { at: 'dial.c:code:"call(char *clone"', role: 'a clone opened, connect written' },
+      ],
+      joints: [
+        { from: 'dial.c:def:_threaddial', to: 'dial.c:code:"_dial_string_parse(char *str"', say: 'the string' },
+        { from: 'dial.c:def:_threaddial', to: 'dial.c:code:"csdial(DS *ds)"', say: 'a netdir' },
+        { from: 'dial.c:code:"csdial(DS *ds)"', to: 'dial.c:code:"call(char *clone"', say: 'each translation' },
+      ],
+    },
+    {
+      name: 'id.c: who a thread is',
+      bones: [
+        { at: 'id.c:def:threadid', role: 'its number' },
+        { at: 'id.c:def:threadpid', role: 'its proc, by walking every proc' },
+        { at: 'id.c:def:threadsetname', role: 'its name, written to /proc' },
+        { at: 'id.c:def:tprivalloc', role: 'a private slot, by a bitmask' },
+        { at: 'id.c:def:tprivaddr', role: "the slot in this thread's udata" },
+      ],
+      joints: [
+        { from: 'id.c:def:tprivalloc', to: 'id.c:def:tprivaddr', say: 'the index' },
+      ],
+    },
+    {
+      name: 'note.c: notes delayed around chanlock',
+      bones: [
+        { at: 'note.c:def:threadnotify', role: 'a handler registered, per pid' },
+        { at: 'note.c:def:_threadnote', role: 'the note arrives: saved' },
+        { at: 'note.c:def:_procsplhi', role: 'notes held off (channel.c)' },
+        { at: 'note.c:def:_procsplx', role: 'notes let in again' },
+        { at: 'note.c:def:delayednotes', role: 'the saved notes handed to the handlers' },
+      ],
+      joints: [
+        { from: 'note.c:def:_threadnote', to: 'note.c:def:delayednotes', say: 'not held off: now' },
+        { from: 'note.c:def:_procsplx', to: 'note.c:def:delayednotes', say: 'the pending ones' },
+        { from: 'note.c:def:threadnotify', to: 'note.c:def:delayednotes', say: 'the handlers' },
+      ],
+    },
+    {
+      name: 'sched.c: a proc running its threads',
+      bones: [
+        { at: 'sched.c:def:_schedinit', role: "the proc's loop: the last thread dealt with" },
+        { at: 'sched.c:def:_sched', role: 'switch: save, choose, resume' },
+        { at: 'sched.c:def:runthread', role: 'the next ready one, or sleep' },
+        { at: 'sched.c:def:_threadready', role: 'queued, the proc woken' },
+        { at: 'sched.c:def:yield', role: 'give way' },
+      ],
+      joints: [
+        { from: 'sched.c:def:yield', to: 'sched.c:def:_sched', say: 'a switch' },
+        { from: 'sched.c:def:_sched', to: 'sched.c:def:_schedinit', say: 'longjmp p->sched' },
+        { from: 'sched.c:def:_schedinit', to: 'sched.c:def:_threadready', say: 'still ready' },
+        { from: 'sched.c:def:_schedinit', to: 'sched.c:def:_sched', say: 'choose' },
+        { from: 'sched.c:def:_sched', to: 'sched.c:def:runthread', say: 'the queue' },
+      ],
+    },
+  ],
+  tours: [
+    {
+      name: 'libthread: a program, its threads, a channel',
+      stops: [
+        { at: 'tests/tprimes.c:def:threadmain', say: 'A threaded program: no main, a threadmain; a chain of prime filters linked by channels.' },
+        { at: 'main.c:def:main', say: "libthread's main: the program's main replaced, the first proc made." },
+        { at: 'create.c:def:newthread', say: 'A thread is a stack and a jmp_buf aimed at its function.' },
+        { at: 'sched.c:def:_sched', say: 'The switch: setjmp the thread, longjmp to the proc, which chooses and longjmps.' },
+        { at: 'channel.c:def:alt', say: 'Every channel operation: pick a ready entry at random, or enqueue and wait.' },
+        { at: 'rendez.c:def:_threadrendezvous', say: 'Waiting parks the thread, not the proc.' },
+        { at: 'main.c:def:_schedfork', say: 'A new proc: rfork(RFMEM), and the child longjmps back into main.' },
+        { at: 'ioproc.c:def:xioproc', say: 'A blocking read would stop every thread of the proc: an io proc does it instead.' },
+      ],
+    },
+  ],
+}

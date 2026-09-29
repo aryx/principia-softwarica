@@ -1,0 +1,52 @@
+// debuggers/tracers/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). From Debugger.nw's chapter on /bin/ratrace (threadmain, writer,
+// reader, forked children).
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "Tracers: ratrace, Plan 9's strace, by /proc/<pid>/syscall; ktrace, a kernel stack dump made symbolic.",
+  files: {
+    'ratrace.c': {
+      summary: "ratrace: a process's system calls printed as they happen, forked children followed, a thread each.",
+      digest: '9696cc62b92b',
+      capitals: [{ at: 'def:reader', say: 'a process traced: syscall lines read, forks followed' }],
+      important: [
+        { at: 'code:"startsyscall"', say: 'stop at each system call entry and exit', weight: 3 },
+        { at: 'code:" Rfork"', say: 'an rfork with RFPROC: a child to trace too', weight: 2 },
+        { at: 'def:writer', say: 'one thread prints what all readers send', weight: 2 },
+        { at: 'def:hang', say: "the child stops at its exec: 'hang' to its own ctl", weight: 2 },
+      ],
+    },
+    'ktrace.c': {
+      summary: 'ktrace: a kernel stack dump (pc, sp, the words) turned into a symbolic backtrace, ARM or x86.',
+      digest: '05308df20508',
+      important: [
+        { at: 'code:"rtrace(uvlong pc"', say: 'RISC: frames by the sp table and link', weight: 2 },
+        { at: 'code:"i386trace(uvlong pc"', say: 'x86: return addresses searched in the stack', weight: 1 },
+        { at: 'code:"readstack(void)"', say: 'the stack words pasted on stdin', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.cmd('ratrace: a process and its children traced', 'ratrace.c:def:threadmain', [
+      ['ratrace.c:def:hang', 'a command forked, stopped before exec', '-c cmd'],
+      ['ratrace.c:def:reader', 'startsyscall; each /proc/<pid>/syscall line sent', 'the pid'],
+      ['ratrace.c:def:writer', 'the lines printed, one thread', 'on the out channel'],
+    ], main_role='threadmain: -c cmd or a pid; the writer proc, then the reader'),
+    skeletons.cmd('ktrace: a stack dump made symbolic', 'ktrace.c:def:main', [
+      ['ktrace.c:code:"readstack(void)"', 'the stack words read', 'unless -i'],
+      ['ktrace.c:code:"inithdr(int fd)"', 'the kernel a.out: its symbols', 'the kernel file'],
+      ['ktrace.c:code:"rtrace(uvlong pc"', 'the frames walked, printed', 'by the magic'],
+    ]),
+    skeletons.parts('tracers: two tools', [
+      ['ratrace.c', 'system calls of a live process'],
+      ['ktrace.c', 'a dead kernel\'s stack'],
+      ['../libmach/', 'symbols, for ktrace'],
+      ['../../kernel/devices/sys/devproc.c', "/proc/<pid>/syscall, for ratrace"],
+    ], [
+      ['ktrace.c', '../libmach/', 'crackhdr, syminit'],
+      ['ratrace.c', '../../kernel/devices/sys/devproc.c', 'ctl and syscall'],
+    ]),
+  ],
+}

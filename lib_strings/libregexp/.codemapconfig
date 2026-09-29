@@ -1,0 +1,137 @@
+// lib_strings/libregexp/: what the code map says of it (tinybox codemap)
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "Rob Pike's regular expressions: compiled to a program, run as parallel threads (Thompson's NFA), no backtracking.",
+  files: {
+    'regcomp.c': {
+      summary: 'The compiler: a pattern parsed by operator precedence, two stacks, into a program of Reinsts, then optimized.',
+      digest: 'd48f3eef8173',
+      capitals: [{ at: 'def:regcomp', say: 'a pattern compiled to a Reprog' }],
+      important: [
+        { at: 'comment:"function [[regcomp1]]"', say: 'lex, then operand or operator, token by token', weight: 3 },
+        { at: 'comment:"function [[operator]]"', say: 'precedence: evaluate what binds tighter', weight: 2 },
+        { at: 'comment:"function [[evaluntil]]"', say: 'fragments joined: CAT, OR, STAR as instructions', weight: 3 },
+        { at: 'comment:"function [[optimize]]"', say: 'NOPs skipped, the program compacted', weight: 1 },
+        { at: 'comment:"function [[bldcclass]]"', say: '[a-z]: ranges of runes as pairs', weight: 1 },
+        { at: 'def:regkaboom', say: 'errors longjmp out of the parse', weight: 1 },
+      ],
+      related: ['../../include/strings/regexp.h'],
+    },
+    'regcomp.h': {
+      summary: 'The machine shared by compiler and executors: the instruction types (operators by precedence) and thread lists.',
+      digest: '952e3719be57',
+      important: [
+        { at: 'comment:"02xx are operators"', say: 'the type is also the precedence', weight: 3 },
+        { at: 'type:Relist', say: 'a thread: an instruction and its matches so far', weight: 2 },
+        { at: 'type:Reljunk', say: 'the two lists, current and next, and where to start', weight: 2 },
+        { at: 'def:LISTSIZE', say: 'threads at most: then retry with BIGLISTSIZE', weight: 1 },
+      ],
+    },
+    'regexec.c': {
+      summary: 'The executor on UTF-8: every thread advanced one character at a time, leftmost-longest match kept.',
+      digest: '31d7a40befaa',
+      capitals: [{ at: 'def:regexec', say: 'run a program on a string' }],
+      important: [
+        { at: 'def:regexec1', say: 'the lock-step loop: all threads, one char', weight: 3 },
+        { at: 'comment:"we ran out of _relist space"', say: '< 0: too many threads, retried bigger', weight: 2 },
+        { at: 'def:regexec2', say: 'the same with lists on the heap', weight: 1 },
+        { at: 'code:"j.starttype = RUNE"', say: 'a literal first rune: skip ahead with strchr', weight: 2 },
+      ],
+    },
+    'rregexec.c': {
+      summary: 'The same executor on Rune strings (sam and acme keep text as runes).',
+      digest: '946ef6b74996',
+      important: [
+        { at: 'def:rregexec1', say: 'as regexec1, a Rune at a time', weight: 2 },
+        { at: 'def:rregexec', weight: 1 },
+      ],
+      related: ['regexec.c'],
+    },
+    'regaux.c': {
+      summary: 'Thread bookkeeping for both executors: add a thread unless its instruction is already there, keep the best match.',
+      digest: 'ca81f9fe25b5',
+      important: [
+        { at: 'def:_renewthread', say: 'one thread per instruction: why it is linear', weight: 3 },
+        { at: 'def:_renewmatch', say: 'leftmost, then longest', weight: 2 },
+      ],
+    },
+    'regsub.c': {
+      summary: 'Substitution: a replacement with \\n and & filled in from the last match.',
+      digest: '2fc3ba3b0d5b',
+    },
+    'rregsub.c': {
+      summary: 'Substitution on Rune strings.',
+      digest: 'b579ee88407b',
+    },
+    'regerror.c': {
+      summary: 'The default error handler: print the message and exit.',
+      digest: 'c2ced194a7ac',
+    },
+  },
+  skeletons: [
+    {
+      name: 'A pattern compiled, then run by threads in lock step',
+      bones: [
+        { at: 'regcomp.c:def:regcomp', role: 'compile: pattern to Reprog' },
+        { at: 'regcomp.c:comment:"function [[evaluntil]]"', role: 'operators to instruction fragments' },
+        { at: 'regcomp.h', role: 'the instructions and the thread lists' },
+        { at: 'regexec.c:def:regexec', role: 'run: set up the two lists' },
+        { at: 'regexec.c:def:regexec1', role: 'every thread one character forward' },
+        { at: 'regaux.c:def:_renewthread', role: 'a thread added, no duplicates' },
+        { at: 'regsub.c:def:regsub', role: 'the matches used' },
+      ],
+      joints: [
+        { from: 'regcomp.c:def:regcomp', to: 'regcomp.c:comment:"function [[evaluntil]]"', say: 'tokens by precedence' },
+        { from: 'regcomp.c:comment:"function [[evaluntil]]"', to: 'regcomp.h', say: 'Reinsts' },
+        { from: 'regcomp.h', to: 'regexec.c:def:regexec', say: 'the Reprog' },
+        { from: 'regexec.c:def:regexec', to: 'regexec.c:def:regexec1', say: 'lists on the stack' },
+        { from: 'regexec.c:def:regexec1', to: 'regaux.c:def:_renewthread', say: 'next list' },
+        { from: 'regexec.c:def:regexec1', to: 'regsub.c:def:regsub', say: 'the Resub matches' },
+      ],
+    },
+    {
+      name: 'regcomp.c: operator precedence with two stacks',
+      bones: [
+        { at: 'regcomp.c:def:regcomp1', role: 'the loop over tokens' },
+        { at: 'regcomp.c:def:lex', role: 'the next token: rune, class, operator' },
+        { at: 'regcomp.c:comment:"function [[operand]]"', role: 'an operand: a one-instruction fragment' },
+        { at: 'regcomp.c:comment:"function [[operator]]"', role: 'an operator: reduce, then push' },
+        { at: 'regcomp.c:comment:"function [[evaluntil]]"', role: 'reduce: pop operators, join fragments' },
+        { at: 'regcomp.c:comment:"function [[optimize]]"', role: 'the program compacted' },
+      ],
+      joints: [
+        { from: 'regcomp.c:def:regcomp1', to: 'regcomp.c:def:lex', say: 'a token' },
+        { from: 'regcomp.c:def:regcomp1', to: 'regcomp.c:comment:"function [[operand]]"', say: 'operands' },
+        { from: 'regcomp.c:def:regcomp1', to: 'regcomp.c:comment:"function [[operator]]"', say: 'operators' },
+        { from: 'regcomp.c:comment:"function [[operator]]"', to: 'regcomp.c:comment:"function [[evaluntil]]"', say: 'higher precedence first' },
+        { from: 'regcomp.c:def:regcomp1', to: 'regcomp.c:comment:"function [[optimize]]"', say: 'the finished program' },
+      ],
+    },
+    {
+      name: 'regexec.c: two tries at a match',
+      bones: [
+        { at: 'regexec.c:def:regexec', role: 'the entry: start set, lists on the stack' },
+        { at: 'regexec.c:def:regexec1', role: 'the NFA simulation, bounded lists' },
+        { at: 'regexec.c:def:regexec2', role: 'again, with big lists on the heap' },
+        { at: 'regaux.c:def:_renewthread', role: 'a thread added' },
+      ],
+      joints: [
+        { from: 'regexec.c:def:regexec', to: 'regexec.c:def:regexec1', say: 'first' },
+        { from: 'regexec.c:def:regexec', to: 'regexec.c:def:regexec2', say: 'if out of room' },
+        { from: 'regexec.c:def:regexec1', to: 'regaux.c:def:_renewthread', say: 'each branch' },
+      ],
+    },
+    {
+      name: 'rregexec.c: the same on runes',
+      bones: [
+        { at: 'rregexec.c:def:rregexec', role: 'the entry' },
+        { at: 'rregexec.c:def:rregexec1', role: 'the NFA simulation over Runes' },
+        { at: 'rregexec.c:def:rregexec2', role: 'with big lists' },
+      ],
+      joints: [
+        { from: 'rregexec.c:def:rregexec', to: 'rregexec.c:def:rregexec1', say: 'first' },
+        { from: 'rregexec.c:def:rregexec', to: 'rregexec.c:def:rregexec2', say: 'if out of room' },
+      ],
+    },
+  ],
+}

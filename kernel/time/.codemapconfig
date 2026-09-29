@@ -1,0 +1,127 @@
+// kernel/time/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// The book: kernel/Kernel.nw, chapter Time.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'Time: the timer interrupt and its sorted timers, the clock tick (HZ), alarms, the time of day.',
+  files: {
+    'portdat_time.h': {
+      summary: "Time's types: a Timer (when, mode, callback) and each CPU's sorted Timers; the tick units.",
+      digest: '9d6052edf5b1',
+      capitals: [
+        { at: 'type:Timer', say: 'a callback at a time, once or periodic' },
+      ],
+      important: [
+        { at: 'type:Timers', say: "a CPU's timers, sorted by when", weight: 2 },
+        { at: 'type:Tfast', say: 'the fastest clock ticks: the time unit', weight: 1 },
+      ],
+    },
+    'portfns_time.h': {
+      summary: "Time's functions and conversions (TK2MS, TK2SEC), and the arch's timer hooks.",
+      digest: '3f752ccf558d',
+      important: [
+        { at: 'def:TK2MS', say: 'ticks to milliseconds, used everywhere', weight: 2 },
+        { at: 'def:arch_timerset', say: 'the hardware timer armed for the next Timer', weight: 2 },
+      ],
+    },
+    'portclock.c': {
+      summary: "The timers: each CPU's sorted list, timerintr running the due ones, hzclock the tick that schedules.",
+      digest: '1c50c14113c7',
+      capitals: [
+        { at: 'def:timerintr', say: 'the clock interrupt: due timers run' },
+      ],
+      important: [
+        { at: 'def:hzclock', say: 'the tick: accounting, alarms, hzsched', weight: 3 },
+        { at: 'def:tadd', say: 'a timer inserted in order', weight: 2 },
+        { at: 'def:timeradd', say: 'the hardware re-armed if it is first', weight: 1 },
+        { at: 'def:timersinit', say: 'the HZ timer, one per CPU', weight: 2 },
+        { at: 'def:addclock0link', say: 'a driver polled periodically by CPU 0', weight: 2 },
+        { at: 'code:"probably stuck in while loop"', say: 'periodic timers can starve the loop', weight: 1 },
+      ],
+      links: [
+        { from: 'def:timerintr', to: 'def:hzclock' },
+        { from: 'def:timeradd', to: 'def:tadd' },
+      ],
+      related: ['../processes/proc.c', 'alarm.c'],
+    },
+    'alarm.c': {
+      summary: 'alarm(2): processes sorted by alarm time, woken by a kernel process that posts the note.',
+      digest: 'f9136e40a7ba',
+      important: [
+        { at: 'def:alarmkproc', say: 'the kproc posting "alarm" notes', weight: 2 },
+        { at: 'def:checkalarms', say: 'each tick: one due? wake the kproc', weight: 2 },
+        { at: 'def:procalarm', say: 'the process into the sorted list', weight: 1 },
+      ],
+    },
+    'tod.c': {
+      summary: 'The time of day in nanoseconds, from the fastest clock by a fixed-point multiplier.',
+      digest: '8515a6b681a0',
+      capitals: [
+        { at: 'def:todget', say: 'now, in nanoseconds since the epoch' },
+      ],
+      important: [
+        { at: 'comment:"Compute nanosecond epoch time from the fastest ticking clock"', say: 'the formula: a multiply, no divide', weight: 3 },
+        { at: 'type:TOD', say: 'the multiplier and the last reading', weight: 2 },
+        { at: 'def:todsetfreq', say: 'the multipliers recomputed for a frequency', weight: 1 },
+        { at: 'def:todset', say: 'the time set, from /dev/time', weight: 1 },
+        { at: 'def:seconds', say: 'the time in seconds', weight: 1 },
+      ],
+    },
+    'mul64fract.c': {
+      summary: 'The default arch_mul64fract: a 64-bit integer times a 32.32 fraction.',
+      digest: '69f411ea5373',
+    },
+  },
+  skeletons: [
+    skeletons.parts('Time: the interrupt, the tick, the users', [
+      ['arm/', "the Pi's timers: the interrupt"],
+      ['386/', "the PC's i8253"],
+      ['portclock.c', 'the timers and the tick'],
+      ['alarm.c', 'alarms'],
+      ['tod.c', 'the time of day'],
+      ['../processes/proc.c', 'the scheduler, preempting'],
+    ], [
+      ['arm/', 'portclock.c', 'timerintr'],
+      ['386/', 'portclock.c', 'timerintr'],
+      ['portclock.c', 'alarm.c', 'checkalarms'],
+      ['portclock.c', '../processes/proc.c', 'hzsched'],
+      ['portclock.c', 'tod.c', 'fast ticks to ns'],
+    ]),
+    {
+      name: 'portclock.c: a clock interrupt',
+      bones: [
+        { at: 'portclock.c:def:timerintr', role: 'the due timers, in order' },
+        { at: 'portclock.c:def:hzclock', role: 'the HZ tick' },
+        { at: 'portclock.c:def:tadd', role: 'a timer put back in order' },
+        { at: 'portclock.c:def:timeradd', role: 'a timer added' },
+        { at: 'portclock.c:def:timersinit', role: 'the tick timer per CPU' },
+        { at: '../processes/proc.c:def:hzsched', role: 'preemption' },
+      ],
+      joints: [
+        { from: 'portclock.c:def:timersinit', to: 'portclock.c:def:timeradd', say: 'the HZ Timer' },
+        { from: 'portclock.c:def:timeradd', to: 'portclock.c:def:tadd', say: 'sorted' },
+        { from: 'portclock.c:def:timerintr', to: 'portclock.c:def:hzclock', say: 'no callback: the tick' },
+        { from: 'portclock.c:def:timerintr', to: 'portclock.c:def:tadd', say: 'periodic: again' },
+        { from: 'portclock.c:def:hzclock', to: '../processes/proc.c:def:hzsched', say: 'a Running process' },
+      ],
+    },
+    {
+      name: 'tod.c: ticks to nanoseconds',
+      bones: [
+        { at: 'tod.c:type:TOD', role: 'the multiplier, the last reading' },
+        { at: 'tod.c:def:todinit', role: 'the clock frequency' },
+        { at: 'tod.c:def:todsetfreq', role: 'the multipliers' },
+        { at: 'tod.c:def:todget', role: 'now: ticks times the multiplier' },
+        { at: 'tod.c:def:todset', role: 'the time set' },
+        { at: 'mul64fract.c:def:arch_mul64fract', role: 'the fixed-point multiply' },
+      ],
+      joints: [
+        { from: 'tod.c:def:todinit', to: 'tod.c:def:todsetfreq', say: 'arch_fastticks frequency' },
+        { from: 'tod.c:def:todsetfreq', to: 'tod.c:type:TOD', say: 'multiplier' },
+        { from: 'tod.c:type:TOD', to: 'tod.c:def:todget', say: 'read' },
+        { from: 'tod.c:def:todget', to: 'mul64fract.c:def:arch_mul64fract', say: 'ticks' },
+      ],
+    },
+  ],
+}

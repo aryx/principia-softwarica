@@ -1,0 +1,542 @@
+// lib_graphics/libdraw/: what the code map says of it (the Graphics book,
+// lib_graphics/Graphics.nw: "Code organization", "Software architecture":
+// a call to line() traced from libdraw to the kernel's drawmesg, then
+// libmemlayer and libmemdraw)
+local skeletons = import '../../skeletons.libsonnet';
+
+// a module's skeleton: its bones in the file (an anchor alone) or
+// elsewhere (a path with its anchor), and its joints
+local kinds = ['def:', 'type:', 'comment:', 'code:', 'line:', 'section:', 'module:'];
+local here(file, a) = if std.length(std.filter(function(k) std.startsWith(a, k), kinds)) > 0 then file + ':' + a else a;
+local mod(file, name, bones, joints=[]) = {
+  name: name,
+  bones: [{ at: here(file, b[0]), role: b[1] } for b in bones],
+  joints: [{ from: here(file, j[0]), to: here(file, j[1]), say: j[2] } for j in joints],
+};
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libdraw: draw.h's images, lines and text, done by writing messages to the kernel's /dev/draw.",
+  files: {
+    'init.c': {
+      summary: 'initdraw: /dev/draw/new opened, the display and its data file, the default font, the window found.',
+      digest: '0041aa4a9eff',
+      capitals: [{ at: 'def:initdraw', say: 'every graphical program starts here' }],
+      important: [
+        { at: 'def:geninitdraw', say: 'the display, the font, the window: the three globals set', weight: 3 },
+        { at: 'def:initdisplay', say: 'draw/new read: the client id, its data and refresh files', weight: 3 },
+        { at: 'code:"%s/draw/%d/data"', say: 'the file every drawing message goes to', weight: 2 },
+        { at: 'code:"/dev/draw/new", AEXIST', say: 'the draw device bound if not there', weight: 1 },
+        { at: 'def:closedisplay', weight: 1 },
+      ],
+    },
+    'flush.c': {
+      summary: "The display's buffer of messages: room made by bufimage, written to /dev/draw/n/data by flushimage.",
+      digest: '97b0f6b19cf6',
+      capitals: [{ at: 'def:flushimage', say: 'the messages sent to the kernel' }],
+      important: [
+        { at: 'def:bufimage', say: 'every drawing call asks here for n bytes of message', weight: 3 },
+        { at: 'def:doflush', say: 'one write() of the whole buffer', weight: 3 },
+        { at: 'code:"*d->bufp++ = \'v\'"', say: "'v': make it visible, flush to the screen", weight: 2 },
+      ],
+    },
+    'draw.c': {
+      summary: "draw(): the one operation, a rectangle of src through a mask onto dst, as a 'd' message.",
+      digest: 'b4a3c9088c22',
+      capitals: [{ at: 'def:draw', say: 'the compositing call behind everything' }],
+      important: [
+        { at: 'def:draw1', say: "the 'd' message: dst, src, mask ids and three points", weight: 3 },
+        { at: 'def:_setdrawop', say: "an 'O' message first when the op is not SoverD", weight: 2 },
+        { at: 'def:border', say: 'four draws, one per side', weight: 1 },
+      ],
+    },
+    'alloc.c': {
+      summary: "allocimage: a new image in the kernel ('b' message, an id), freeimage ('f').",
+      digest: '4771d2782fac',
+      capitals: [{ at: 'def:allocimage', say: 'an image, made in the kernel' }],
+      important: [
+        { at: 'def:_allocimage', say: "the 'b' message: id, chan, repl, rectangles, colour", weight: 3 },
+        { at: 'def:freeimage', weight: 2 },
+        { at: 'def:allocimagemix', say: 'a mixed colour: a 2x2 pattern on small depths', weight: 1 },
+      ],
+    },
+    'arith.c': {
+      summary: "Points and rectangles: Pt, Rect, addpt, insetrect, ptinrect -- every program's geometry.",
+      digest: '213d60fd4da3',
+      important: [
+        { at: 'def:Rect', say: 'min inclusive, max exclusive', weight: 2 },
+        { at: 'def:insetrect', weight: 1 },
+        { at: 'def:ptinrect', weight: 1 },
+        { at: 'def:canonrect', say: 'corners reordered after a sweep', weight: 1 },
+      ],
+    },
+    'string.c': {
+      summary: "Text drawn: the runes' glyphs found in the font cache, one 's' message per run of cached chars.",
+      digest: 'bee13f9be7ed',
+      capitals: [{ at: 'comment:"function [[_string]]"', say: 'all the string functions end here' }],
+      important: [
+        { at: 'def:string', weight: 1 },
+        { at: 'code:"n = cachechars(f, sptr"', say: 'runes to cache indices, loading glyphs if needed', weight: 3 },
+        { at: 'code:"b = bufimage(dst->display, m)"', say: "the 's' message: dst, src, font, points, indices", weight: 3 },
+        { at: 'def:stringbg', say: "rio's text: drawn on a background, 'x'", weight: 2 },
+      ],
+    },
+    'fontcache.c': {
+      summary: "A font's cache of glyphs, kept in an image in the kernel: runes looked up, missing ones loaded from subfonts.",
+      digest: 'b94d9fbea448',
+      capitals: [{ at: 'def:cachechars', say: 'runes to glyph cache slots' }],
+      important: [
+        { at: 'def:loadchar', say: "a glyph copied from its subfont into the cache ('l')", weight: 3 },
+        { at: 'def:agefont', say: 'least recently used, to be replaced', weight: 2 },
+        { at: 'def:cf2subfont', say: 'which subfont file holds the rune', weight: 1 },
+        { at: 'comment:"function [[fontresize]]"', say: 'the cache grown, all glyphs reloaded', weight: 1 },
+      ],
+    },
+    'font.c': {
+      summary: 'Fonts opened: a font file read, its ranges of runes each naming a subfont file.',
+      digest: '3d2ddddd021c',
+      important: [
+        { at: 'def:openfont', weight: 2 },
+        { at: 'def:buildfont', say: 'the font file parsed: height, ascent, ranges', weight: 3 },
+        { at: 'def:freefont', weight: 1 },
+      ],
+    },
+    'subfont.c': {
+      summary: 'Subfonts: a strip of glyphs in an image and its Fontchar table, read, written, and the default one.',
+      digest: '2a52d560403e',
+      important: [
+        { at: 'def:getdefont', say: 'the built-in font, from defont.c', weight: 2 },
+        { at: 'def:readsubfont', say: 'an image then its Fontchar table', weight: 3 },
+        { at: 'def:allocsubfont', weight: 1 },
+        { at: 'def:writesubfont', weight: 1 },
+      ],
+    },
+    'stringwidth.c': {
+      summary: 'How wide a string will be, measured through the same font cache as drawing it.',
+      digest: 'dcad5f00f6a8',
+      important: [{ at: 'def:_stringnwidth', say: 'cachechars without the drawing', weight: 2 }, { at: 'def:stringwidth', weight: 1 }],
+    },
+    'defont.c': {
+      summary: 'The default font, compiled in as bytes; also linked by the kernel for its text console.',
+      digest: 'ee578ae13d8c',
+      important: [
+        { at: 'comment:"one of the very few files linked by the kernel"', say: 'why it must stay dependency-free', weight: 2 },
+        { at: 'def:defontdata', weight: 1 },
+      ],
+    },
+    'mouse.c': {
+      summary: "The mouse as a channel: a proc reads /dev/mouse and sends each Mouse on the Mousectl's channel.",
+      digest: '7da80da239a7',
+      capitals: [{ at: 'def:readmouse', say: 'a program waits for the mouse here' }],
+      important: [
+        { at: 'def:initmouse', say: '/dev/mouse opened, its reading proc started', weight: 3 },
+        { at: 'def:_ioproc', say: 'blocked in read(), so no thread of the program is', weight: 3 },
+        { at: 'code:"send(mc->resizec, &one)"', say: "'r' from the device: the window was resized", weight: 2 },
+        { at: 'def:setcursor', say: '/dev/cursor written', weight: 1 },
+        { at: 'def:moveto', weight: 1 },
+      ],
+    },
+    'keyboard.c': {
+      summary: 'The keyboard as a channel: a proc reads /dev/cons in raw mode and sends each rune.',
+      digest: '3a2323ff1b90',
+      capitals: [{ at: 'def:initkeyboard', say: 'a Keyboardctl: runes on a channel' }],
+      important: [
+        { at: 'def:_ioproc', say: 'the reading proc: bytes to runes, sent one by one', weight: 3 },
+        { at: 'code:"send(kc->c, &r)"', say: "each rune sent: rio's keyboardthread receives it", weight: 2 },
+        { at: 'def:ctlkeyboard', say: 'rawon written to /dev/consctl', weight: 1 },
+      ],
+    },
+    'event.c': {
+      summary: "The older event loop (event.h): a slave process per input writing to a pipe, read by event().",
+      digest: '87aae819bcd4',
+      capitals: [{ at: 'def:einit', say: 'the event library started' }],
+      important: [
+        { at: 'type:Slave', say: 'an input source: a process and its queue', weight: 2 },
+        { at: 'comment:"function [[eforkslave]]"', say: 'a process per source, writing into epipe', weight: 3 },
+        { at: 'def:eread', say: 'queued events first, else read the pipe', weight: 3 },
+        { at: 'comment:"function [[extract]]"', say: 'the pipe read, messages sorted to their slave', weight: 2 },
+        { at: 'def:emouse', weight: 1 },
+        { at: 'def:ekbd', weight: 1 },
+      ],
+    },
+    'window.c': {
+      summary: "Windows as layered images on a Screen: allocwindow, topwindow, and getwindow after a resize.",
+      digest: '48d69f8cee7a',
+      capitals: [{ at: 'def:getwindow', say: "the program's window, found again after a resize" }],
+      important: [
+        { at: 'def:allocwindow', say: 'an image on a screen: a layer in the kernel', weight: 3 },
+        { at: 'def:gengetwindow', say: '/dev/winname read, the named image looked up', weight: 2 },
+        { at: 'def:topbottom', say: "'t' message: the kernel restores the pixels", weight: 3 },
+        { at: 'def:originwindow', weight: 1 },
+        { at: 'def:newwindow', say: 'a new rio window: $wsys mounted on /dev', weight: 2 },
+      ],
+    },
+    'desktop.c': {
+      summary: 'Screens: the desktop on which windows are layers (allocscreen, publicscreen).',
+      digest: 'c54af01adf2e',
+      important: [{ at: 'def:allocscreen', say: "'A' message: an image and its fill", weight: 2 }, { at: 'def:publicscreen', weight: 1 }],
+    },
+    'naming.c': {
+      summary: "Images named in the kernel, so another client can use them (rio's windows' names).",
+      digest: '3dbc028cd64f',
+      important: [{ at: 'def:namedimage', weight: 2 }, { at: 'def:nameimage', weight: 1 }],
+    },
+    'transfer.c': {
+      summary: "Pixels moved in and out of an image: loadimage ('y') and unloadimage ('r').",
+      digest: 'fc56d496f6a3',
+      important: [{ at: 'def:loadimage', weight: 2 }, { at: 'def:unloadimage', weight: 1 }],
+    },
+    'io.c': {
+      summary: 'readimage: an image file (a header of 5 numbers, then pixels) read into a new image.',
+      digest: '78d6b965a1fe',
+      important: [
+        { at: 'def:readimage', weight: 2 },
+        { at: 'code:"return creadimage(d, fd, dolock)"', say: 'compressed files handed over', weight: 2 },
+        { at: 'code:"chan = strtochan(hdr)"', say: "the pixel format, as a string: 'r8g8b8'", weight: 1 },
+      ],
+    },
+    'compressed.c': {
+      summary: 'Compressed images: LZ77-like byte codes read (creadimage) and written (writeimage, a hash of prefixes).',
+      digest: 'cc0ea658e6c4',
+      important: [
+        { at: 'comment:"compressed data are seuences of byte codes"', say: 'the format, in four lines', weight: 3 },
+        { at: 'def:creadimage', weight: 2 },
+        { at: 'def:writeimage', weight: 2 },
+        { at: 'def:hupdate', weight: 1 },
+      ],
+    },
+    'chan.c': {
+      summary: "Pixel formats (chan): a descriptor to and from its string ('r8g8b8'), and its depth.",
+      digest: '695ab5a6bc53',
+      important: [{ at: 'def:strtochan', weight: 1 }, { at: 'def:chantodepth', weight: 1 }],
+    },
+    'resolution.c': {
+      summary: 'How many bytes a line of an image takes, by its depth.',
+      digest: 'b130d64ca1b0',
+      important: [{ at: 'def:bytesperline', weight: 1 }],
+    },
+    'colormap.c': {
+      summary: "Colour maps of 8-bit displays: read and written, RGB to a map's index and back.",
+      digest: '160e5fe0b45c',
+      important: [{ at: 'def:rgb2cmap', weight: 2 }, { at: 'def:cmap2rgb', weight: 1 }, { at: 'def:readcolmap', weight: 1 }],
+    },
+    'line.c': {
+      summary: "line(): a thick line with its ends, one 'L' message.",
+      digest: 'ebcb6ca80d47',
+      important: [{ at: 'def:lineop', say: "the 'L' message", weight: 2 }],
+    },
+    'poly.c': {
+      summary: "Polygons, open or filled: points delta-encoded in the 'p' and 'P' messages.",
+      digest: '5b7befae8f46',
+      important: [{ at: 'def:addcoord', say: 'a coordinate in 1 or 3 bytes', weight: 2 }, { at: 'def:dopoly', weight: 1 }],
+    },
+    'ellipse.c': {
+      summary: "Ellipses and arcs, drawn or filled: the 'e' and 'E' messages.",
+      digest: 'bc1eb934c5e7',
+      important: [{ at: 'def:doellipse', weight: 1 }],
+    },
+    'bezier.c': {
+      summary: 'Bezier curves and splines, flattened into polygons by recursive subdivision.',
+      digest: 'fcf41b6a3150',
+      important: [{ at: 'def:bpts1', say: 'split in two until flat enough', weight: 2 }, { at: 'def:_bezsplinepts', weight: 1 }],
+    },
+    'replclipr.c': {
+      summary: "An image's clip rectangle and replication changed ('c'), and the geometry of both.",
+      digest: '08a5f77f0242',
+      important: [{ at: 'def:replclipr', weight: 1 }, { at: 'def:rectclip', weight: 1 }],
+    },
+    'replclipr_geom.c': {
+      summary: "replclipr.c's pure geometry (rectclip, drawrepl), apart so the kernel can link it.",
+      digest: 'f0108193c738',
+    },
+    'menuhit.c': {
+      summary: "Pop-up menus for threaded programs (rio's button-3 menu): drawn in a window, tracked with the mouse.",
+      digest: 'faaa74815487',
+      important: [
+        { at: 'def:menuhit', weight: 2 },
+        { at: 'def:menuscan', say: 'the item under the mouse, while buttons are held', weight: 2 },
+        { at: 'def:menupaint', weight: 1 },
+      ],
+    },
+    'emenuhit.c': {
+      summary: "menuhit.c's twin for event.h programs: the same pop-up menus, the mouse read by emouse.",
+      digest: '138e7054aa8d',
+      important: [{ at: 'def:emenuhit', weight: 2 }, { at: 'def:menuscan', weight: 1 }],
+    },
+    'getrect.c': {
+      summary: "A rectangle swept out with the mouse (rio's New and Resize), a red outline following it.",
+      digest: '3be3450900d2',
+      important: [{ at: 'def:getrect', weight: 2 }, { at: 'def:drawgetrect', weight: 1 }],
+    },
+    'egetrect.c': {
+      summary: "getrect.c's twin for event.h programs.",
+      digest: 'b28a305a3f44',
+    },
+    'enter.c': {
+      summary: 'A small text-entry box over the screen, for threaded programs: the answer typed and returned.',
+      digest: '4e134916c958',
+      important: [{ at: 'def:enter', weight: 1 }],
+    },
+    'eenter.c': {
+      summary: "enter.c's twin for event.h programs.",
+      digest: 'c17b3135bdfa',
+    },
+    'globals.c': {
+      summary: 'The globals initdraw sets: display, view (the window) and font.',
+      digest: '87c0199f0b5c',
+      important: [{ at: 'def:display', weight: 2 }, { at: 'def:view', say: "the window's image (Plan 9's screen)", weight: 2 }, { at: 'def:font', weight: 1 }],
+    },
+    'concurrency.c': {
+      summary: 'lockdisplay: the display shared by the procs of a threaded program.',
+      digest: '0aafd13b5899',
+    },
+    'error.c': {
+      summary: 'drawerror: the default error function, prints and exits.',
+      digest: '7d86c837b7aa',
+    },
+    'debug.c': {
+      summary: 'drawsetdebug: the kernel asked to print the messages it receives.',
+      digest: 'dbb5d77fba20',
+    },
+    'fmt.c': {
+      summary: "print's %P and %R: points and rectangles printed.",
+      digest: '1e402f1c987f',
+    },
+    'misc.c': {
+      summary: 'drawld2chan: old log-depths to pixel formats.',
+      digest: 'fd45317880bf',
+    },
+    'icossin.c': {
+      summary: 'Integer sine and cosine by degree, from tables (for arcs); kernel-linkable.',
+      digest: 'ea7a22fdf451',
+    },
+    'icossin2.c': {
+      summary: 'Integer sine and cosine of an arctangent, from tables with interpolation; kernel-linkable.',
+      digest: '24ef8b0bca40',
+    },
+  },
+  skeletons: [
+    skeletons.chain('libdraw: a call to a message to the kernel (Graphics.nw\'s trace of line())', [
+      ['init.c:def:initdraw', 'the display opened: /dev/draw/new, then n/data', ''],
+      ['line.c:def:lineop', 'a drawing call: its message built', 'the display'],
+      ['flush.c:def:bufimage', "room in the display's buffer", 'n bytes'],
+      ['flush.c:def:flushimage', 'the buffer written to /dev/draw/n/data', 'full, or asked'],
+      ['../../kernel/devices/screen/drawmesg.c:def:drawmesg', 'the kernel parses and draws', 'write()'],
+    ]),
+    skeletons.parts('libdraw: its parts', [
+      ['init.c', 'the display, the font, the window'],
+      ['draw.c', 'the drawing calls: draw, line, poly, ellipse...'],
+      ['string.c', 'text, through the font cache'],
+      ['fontcache.c', 'glyphs cached in a kernel image'],
+      ['flush.c', 'the message buffer, written to the kernel'],
+      ['window.c', 'windows as layers: for rio'],
+      ['mouse.c', 'input as channels: mouse and keyboard.c'],
+      ['event.c', 'input as events, the older way'],
+    ], [
+      ['init.c', 'draw.c', 'display, view'],
+      ['draw.c', 'flush.c', 'a message'],
+      ['string.c', 'fontcache.c', 'runes'],
+      ['string.c', 'flush.c', "an 's' message"],
+      ['fontcache.c', 'flush.c', "an 'l' message"],
+      ['window.c', 'flush.c', "'t', 'o' messages"],
+      ['mouse.c', 'flush.c', 'flushed before a read'],
+    ]),
+    mod('init.c', 'initdraw: a program connected to the display', [
+      ['def:initdraw', 'the call every program makes'],
+      ['def:geninitdraw', 'display, font, window set'],
+      ['def:initdisplay', '/dev/draw/new: the client and its files'],
+      ['window.c:def:getwindow', 'the window image found'],
+      ['font.c:def:openfont', 'the font'],
+    ], [
+      ['def:initdraw', 'def:geninitdraw', '/dev'],
+      ['def:geninitdraw', 'def:initdisplay', 'the device directory'],
+      ['def:geninitdraw', 'font.c:def:openfont', '$font'],
+      ['def:geninitdraw', 'window.c:def:getwindow', 'the display'],
+    ]),
+    mod('alloc.c', 'An image made and freed in the kernel', [
+      ['def:allocimage', 'the call'],
+      ['def:_allocimage', "the 'b' message, a new id"],
+      ['def:freeimage', "the 'f' message"],
+      ['def:_freeimage1', 'the Image record freed'],
+      ['flush.c:def:bufimage', 'the message buffer'],
+    ], [
+      ['def:allocimage', 'def:_allocimage', 'rectangle, chan, colour'],
+      ['def:_allocimage', 'flush.c:def:bufimage', "'b'"],
+      ['def:freeimage', 'def:_freeimage1', 'the image'],
+    ]),
+    mod('arith.c', 'Points and rectangles', [
+      ['def:Pt', 'a point'],
+      ['def:Rect', 'a rectangle'],
+      ['def:addpt', 'points added'],
+      ['def:insetrect', 'a rectangle shrunk'],
+      ['def:ptinrect', 'a point tested'],
+    ], [
+      ['def:Pt', 'def:addpt', 'points'],
+      ['def:Rect', 'def:insetrect', 'a rectangle'],
+      ['def:Rect', 'def:ptinrect', 'a rectangle'],
+    ]),
+    mod('bezier.c', 'A curve flattened into a polygon', [
+      ['def:bezier', 'the call'],
+      ['def:bezierpts', 'the points wanted'],
+      ['def:bpts1', 'recursive subdivision'],
+      ['def:appendpt', 'a point kept'],
+      ['poly.c:def:polyop', 'drawn as a polygon'],
+    ], [
+      ['def:bezier', 'def:bezierpts', 'four control points'],
+      ['def:bezierpts', 'def:bpts1', 'the curve'],
+      ['def:bpts1', 'def:appendpt', 'flat enough: a point'],
+      ['def:bezier', 'poly.c:def:polyop', 'the points'],
+    ]),
+    mod('colormap.c', 'Colour maps', [
+      ['def:readcolmap', 'the map read'],
+      ['def:writecolmap', 'the map written'],
+      ['def:rgb2cmap', 'nearest index'],
+      ['def:cmap2rgb', 'index to colour'],
+    ], [['def:rgb2cmap', 'def:cmap2rgb', 'each index tried']]),
+    mod('compressed.c', 'Compressed images, read and written', [
+      ['def:creadimage', 'a compressed file read'],
+      ['def:_twiddlecompressed', 'bits reversed for small depths'],
+      ['def:writeimage', 'an image written, compressed'],
+      ['def:hupdate', 'the hash of prefixes updated'],
+      ['type:Hlist', 'a hash chain'],
+    ], [
+      ['def:creadimage', 'def:_twiddlecompressed', 'blocks'],
+      ['def:writeimage', 'def:hupdate', 'each position'],
+      ['def:hupdate', 'type:Hlist', 'chained'],
+    ]),
+    mod('defont.c', 'The default font as data', [
+      ['def:defontdata', 'the bytes'],
+      ['def:sizeofdefont', 'their size'],
+      ['def:_unpackinfo', 'its Fontchar table unpacked'],
+      ['subfont.c:def:getdefont', 'read into a subfont'],
+    ], [['def:defontdata', 'subfont.c:def:getdefont', 'the bytes'], ['subfont.c:def:getdefont', 'def:_unpackinfo', 'the table']]),
+    mod('eenter.c', 'A text box, by events', [
+      ['def:eenter', 'the box, its loop'],
+      ['code:"i = eread(i, &ev)"', 'a key or the mouse'],
+      ['code:"p = stringn(b, p"', 'the answer drawn'],
+    ], [['code:"i = eread(i, &ev)"', 'code:"p = stringn(b, p"', 'a rune typed']]),
+    mod('enter.c', 'A text box, by channels', [
+      ['def:enter', 'the box, its loop'],
+      ['code:"alt(a)"', 'a key or the mouse'],
+      ['code:"freeimage(backcol)"', 'the box removed'],
+    ], [['code:"alt(a)"', 'def:enter', 'a rune, a Mouse']]),
+    mod('emenuhit.c', 'A menu, by events', [
+      ['def:emenuhit', 'the menu: drawn, tracked'],
+      ['def:menupaint', 'its items drawn'],
+      ['def:menuscan', 'the item under the mouse'],
+      ['def:paintitem', 'an item, highlighted or not'],
+    ], [['def:emenuhit', 'def:menupaint', 'the items'], ['def:emenuhit', 'def:menuscan', 'buttons held'], ['def:menuscan', 'def:paintitem', 'the new item']]),
+    mod('menuhit.c', "A menu, by channels (rio's)", [
+      ['def:menuhit', 'the menu: a window, tracked'],
+      ['def:menupaint', 'its items drawn'],
+      ['def:menuscan', 'the item under the mouse'],
+      ['def:paintitem', 'an item, highlighted or not'],
+      ['mouse.c:def:readmouse', 'the mouse'],
+    ], [['def:menuhit', 'def:menupaint', 'the items'], ['mouse.c:def:readmouse', 'def:menuscan', 'each Mouse'], ['def:menuscan', 'def:paintitem', 'the new item']]),
+    mod('event.c', 'Events: slave processes and a pipe', [
+      ['def:einit', 'mouse and keyboard slaves started'],
+      ['def:estartfn', 'a source added'],
+      ['comment:"function [[eforkslave]]"', 'a process reading one source'],
+      ['comment:"function [[extract]]"', 'the pipe read'],
+      ['def:eread', 'the next event'],
+      ['def:emouse', 'a mouse event'],
+    ], [
+      ['def:einit', 'def:estartfn', 'Emouse, Ekeyboard'],
+      ['def:estartfn', 'comment:"function [[eforkslave]]"', 'a key'],
+      ['comment:"function [[eforkslave]]"', 'comment:"function [[extract]]"', 'messages on epipe'],
+      ['comment:"function [[extract]]"', 'def:eread', 'queued'],
+      ['def:eread', 'def:emouse', 'an Event'],
+    ]),
+    mod('font.c', 'A font file read', [
+      ['def:openfont', 'the file'],
+      ['def:buildfont', 'its text parsed'],
+      ['def:skip', 'blanks skipped'],
+      ['def:freefont', 'freed'],
+    ], [['def:openfont', 'def:buildfont', 'the text'], ['def:buildfont', 'def:skip', 'each field']]),
+    mod('fontcache.c', 'The glyph cache', [
+      ['def:cachechars', 'runes to cache slots'],
+      ['def:loadchar', 'a missing glyph loaded'],
+      ['def:cf2subfont', 'its subfont found'],
+      ['def:agefont', 'ages, for eviction'],
+      ['comment:"function [[fontresize]]"', 'the cache grown'],
+    ], [
+      ['def:cachechars', 'def:loadchar', 'a miss'],
+      ['def:loadchar', 'def:cf2subfont', 'the rune'],
+      ['def:loadchar', 'def:agefont', 'full'],
+      ['def:loadchar', 'comment:"function [[fontresize]]"', 'too small'],
+    ]),
+    mod('getrect.c', 'A rectangle swept', [
+      ['def:getrect', 'the sweep'],
+      ['def:drawgetrect', 'the outline drawn'],
+      ['def:brects', 'its four sides'],
+      ['mouse.c:def:readmouse', 'each move'],
+    ], [['mouse.c:def:readmouse', 'def:getrect', 'the corner'], ['def:getrect', 'def:drawgetrect', 'the rectangle'], ['def:drawgetrect', 'def:brects', 'four rectangles']]),
+    mod('icossin2.c', 'Sine and cosine of an arctangent', [
+      ['def:sinus', 'the sine table'],
+      ['def:cosinus', 'the cosine table'],
+      ['def:icossin2', 'looked up, interpolated'],
+    ], [['def:sinus', 'def:icossin2', 'values'], ['def:cosinus', 'def:icossin2', 'values']]),
+    mod('io.c', 'An image file read', [
+      ['def:readimage', 'the header read'],
+      ['code:"return creadimage(d, fd, dolock)"', 'or compressed'],
+      ['code:"chan = strtochan(hdr)"', 'the pixel format'],
+      ['code:"loadimage("', 'the pixels loaded'],
+    ], [['def:readimage', 'code:"chan = strtochan(hdr)"', 'the header'], ['code:"chan = strtochan(hdr)"', 'code:"loadimage("', 'a new image']]),
+    mod('mouse.c', 'The mouse as a channel', [
+      ['def:initmouse', 'the Mousectl'],
+      ['def:_ioproc', 'the proc reading /dev/mouse'],
+      ['def:readmouse', 'the next Mouse received'],
+      ['def:setcursor', 'the cursor changed'],
+    ], [['def:initmouse', 'def:_ioproc', 'proccreate'], ['def:_ioproc', 'def:readmouse', 'a Mouse on mc->c']]),
+    mod('string.c', 'Text drawn', [
+      ['def:string', 'the call'],
+      ['comment:"function [[_string]]"', 'all variants end here'],
+      ['fontcache.c:def:cachechars', 'runes to glyph slots'],
+      ['flush.c:def:bufimage', "the 's' message"],
+      ['def:stringbg', 'on a background'],
+    ], [
+      ['def:string', 'comment:"function [[_string]]"', 'chars'],
+      ['def:stringbg', 'comment:"function [[_string]]"', 'chars, bg'],
+      ['comment:"function [[_string]]"', 'fontcache.c:def:cachechars', 'runes'],
+      ['comment:"function [[_string]]"', 'flush.c:def:bufimage', 'indices'],
+    ]),
+    mod('subfont.c', 'Subfonts: strips of glyphs', [
+      ['def:readsubfont', 'a subfont file read'],
+      ['def:allocsubfont', 'the Subfont record'],
+      ['def:getdefont', 'the built-in one'],
+      ['def:_getsubfont', 'by name'],
+      ['def:writesubfont', 'written'],
+    ], [['def:_getsubfont', 'def:readsubfont', 'a file'], ['def:readsubfont', 'def:allocsubfont', 'image and table'], ['def:getdefont', 'def:allocsubfont', 'defont']]),
+    mod('window.c', 'Windows as layers', [
+      ['def:allocwindow', 'a layer on a screen'],
+      ['def:_allocwindow', "the 'b' message, with a screen"],
+      ['def:getwindow', 'the window, after a resize'],
+      ['def:gengetwindow', '/dev/winname looked up'],
+      ['def:topbottom', 'raised or lowered'],
+      ['def:topwindow', 'to the top'],
+    ], [
+      ['def:allocwindow', 'def:_allocwindow', 'screen, rectangle'],
+      ['def:getwindow', 'def:gengetwindow', 'the display'],
+      ['def:gengetwindow', 'def:_allocwindow', 'rio: a window on its screen'],
+      ['def:topwindow', 'def:topbottom', 'the image'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'Hello, draw: from initdraw to the kernel',
+      stops: [
+        { at: 'init.c:def:initdraw', say: 'The display, the default font and the window image, once.' },
+        { at: 'alloc.c:def:allocimage', say: "An image lives in the kernel; the program keeps its id." },
+        { at: 'draw.c:def:draw1', say: "draw(): the whole call becomes a 'd' message of ids and points." },
+        { at: 'string.c:comment:"function [[_string]]"', say: 'Text: glyphs cached in a kernel image, then drawn by index.' },
+        { at: 'fontcache.c:def:loadchar', say: 'A missing glyph is copied from its subfont into the cache.' },
+        { at: 'flush.c:def:bufimage', say: 'All messages accumulate here...' },
+        { at: 'flush.c:def:doflush', say: '...and go to the kernel in one write().' },
+        { at: 'mouse.c:def:_ioproc', say: 'Input: a proc blocked in read(), sending on a channel.' },
+      ],
+    },
+  ],
+  views: [
+    { name: 'libdraw and the kernel under it', files: ['flush.c', 'draw.c', '../../kernel/devices/screen/', '../libmemlayer/', '../libmemdraw/'] },
+    { name: 'Fonts', files: ['font.c', 'fontcache.c', 'subfont.c', 'string.c', 'stringwidth.c', 'defont.c'] },
+  ],
+}

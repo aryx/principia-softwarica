@@ -1,0 +1,268 @@
+// debuggers/acid/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). From Debugger.nw ("Software architecture", its control-flow
+// figure: main -> yyparse -> execute -> expr -> expop[] -> ocall ->
+// a C builtin -> msg or put1 -> /proc/<pid>/). The grammar, dbg.y, is
+// yacc's, not a source here: its rules build Nodes and call execute.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "acid, Plan 9's programmable debugger: a small C-like language interpreted, its builtins driving /proc/<pid>.",
+  files: {
+    'acid.h': {
+      summary: "The interpreter's types: the AST (Node), symbols (Lsym), values, lists, types; the globals and prototypes.",
+      digest: '19f08ec0f0ee',
+      capitals: [
+        { at: 'comment:"struct [[Node]]"', say: 'the AST: an op, left, right, a value' },
+        { at: 'comment:"struct [[Lsym]]"', say: 'a name: a variable, an acid function or a C builtin' },
+      ],
+      important: [
+        { at: 'comment:"struct [[Value]]"', say: "a variable's value, stacked by scopes (pop)", weight: 2 },
+        { at: 'comment:"struct [[List]]"', say: "acid's lists: a stack trace is one", weight: 1 },
+        { at: 'code:"#define expr(n, r)"', say: 'expr is a macro: expop indexed by the op', weight: 3 },
+        { at: 'def:cormap', say: 'the process memory (/proc/<pid>/mem) as a Map', weight: 2 },
+        { at: 'def:symmap', say: 'the executable text, for the symbols', weight: 1 },
+      ],
+    },
+    'main.c': {
+      summary: 'The entry: flags, the executable cracked, the acid libraries loaded, then the read-eval loop.',
+      digest: '0f7fd24d411e',
+      important: [
+        { at: 'code:port.acid', say: 'most of the debugger is acid code, loaded first', weight: 3 },
+        { at: 'code:"if(yyparse() != OK_1)"', say: 'the REPL: the parser executes each statement', weight: 3 },
+        { at: 'def:attachfiles', say: 'the text (a file or /proc/<pid>/text) and memory', weight: 2 },
+        { at: 'def:readtext', say: 'crackhdr, syminit: libmach reads the a.out', weight: 2 },
+        { at: 'def:gc', say: 'a mark and sweep over nodes, values, lists', weight: 1 },
+        { at: 'def:userinit', say: '$home/lib/acid, then the user\'s acidmap()', weight: 1 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:attachfiles' },
+        { from: 'def:attachfiles', to: 'def:readtext' },
+        { from: 'def:main', to: 'def:loadmodule' },
+      ],
+    },
+    'lex.c': {
+      summary: "The lexer: a stack of inputs (files loaded, strings, stdin), keywords, numbers and symbols for yacc's parser.",
+      digest: 'cf281178006b',
+      important: [
+        { at: 'def:yylex', say: "called by yyparse: acid's tokens", weight: 3 },
+        { at: 'def:pushfile', say: 'a module read: /lib/acid/*.acid, then stdin', weight: 2 },
+        { at: 'def:keywds', say: 'defn, local, complex, aggr...', weight: 1 },
+        { at: 'def:look', say: 'the symbol table: a hash of Lsyms', weight: 2 },
+        { at: 'def:numsym', say: 'a number or a name, $ and . allowed', weight: 1 },
+      ],
+    },
+    'exec.c': {
+      summary: 'Statements run (execute) and memory read and written through libmach maps (indir, windir); errors longjmp.',
+      digest: '974e92610d6b',
+      capitals: [{ at: 'def:execute', say: 'a statement run: if, while, loop, or an expr' }],
+      important: [
+        { at: 'def:error', say: 'every error longjmps back to the REPL', weight: 2 },
+        { at: 'def:indir', say: '*addr: read from the process by its format', weight: 3 },
+        { at: 'def:windir', say: '*addr = v: written through the map', weight: 2 },
+        { at: 'def:call', say: 'an acid function: formals bound, body run', weight: 2 },
+      ],
+      links: [{ from: 'def:execute', to: 'def:call' }],
+    },
+    'expr.c': {
+      summary: 'Expressions evaluated: one function per operator (oadd, ocall, oindm...), dispatched by the expop table.',
+      digest: '4c842136bfc0',
+      capitals: [{ at: 'def:expop', say: 'expr(n) = expop[n->op](n, res)' }],
+      important: [
+        { at: 'def:ocall', say: 'a C builtin, or an acid defn by call()', weight: 3 },
+        { at: 'def:oindm', say: '*p: memory read by format', weight: 2 },
+        { at: 'def:oasgn', say: 'assignment: a variable, or memory by windir', weight: 1 },
+        { at: 'def:oframe', say: 'fn:local: a variable in a stack frame', weight: 2 },
+        { at: 'def:owhat', say: 'whatis: the type or code of a name', weight: 1 },
+      ],
+    },
+    'builtin.c': {
+      summary: 'The C builtins acid code calls: process control, maps, strace, print and format conversions.',
+      digest: 'f3506abf8916',
+      capitals: [{ at: 'def:tab', say: 'the builtins by name: new, start, stop, strace...' }],
+      important: [
+        { at: 'def:installbuiltin', say: 'each name made an Lsym with builtin set', weight: 2 },
+        { at: 'def:newproc', say: 'new(): fork, hang, exec the program', weight: 3 },
+        { at: 'def:startstop', say: 'cont: run until the next stop', weight: 2 },
+        { at: 'def:strace', say: 'the stack walked by machdata->ctrace', weight: 2 },
+        { at: 'def:bprint', say: 'print(): each value by its format', weight: 1 },
+      ],
+    },
+    'proc.c': {
+      summary: 'The debugged processes: started, attached, stopped; the ctl messages written to /proc/<pid>/ctl.',
+      digest: '208656595c9d',
+      capitals: [{ at: 'def:msg', say: 'a ctl message: start, stop, waitstop...' }],
+      important: [
+        { at: 'def:nproc', say: 'fork, hang, exec: the child stops at its start', weight: 3 },
+        { at: 'def:sproc', say: 'a pid attached: /proc/<pid>/mem as the map', weight: 2 },
+        { at: 'def:install', say: 'the process list, $pids in acid', weight: 1 },
+        { at: 'def:dostop', say: 'stopped: the acid stopped() hook', weight: 1 },
+      ],
+    },
+    'dot.c': {
+      summary: "Complex types: aggr and complex declarations built, the '.' member access resolved.",
+      digest: '7eb40c36451f',
+      important: [
+        { at: 'def:odot', say: 'a.b: the member found, its offset added', weight: 2 },
+        { at: 'def:buildtype', say: 'aggr/union members laid out', weight: 1 },
+      ],
+    },
+    'list.c': {
+      summary: "acid's lists (construct, append, head/tail) and the locals and parameters lists of a frame.",
+      digest: 'f9e6d5f5010d',
+      important: [
+        { at: 'def:construct', say: '{a, b, c}: a list built', weight: 1 },
+        { at: 'def:trlist', say: "a frame's locals and params for strace", weight: 2 },
+      ],
+    },
+    'print.c': {
+      summary: 'The AST printed back as acid source (pcode, pexpr), for whatis on a function.',
+      digest: 'd1fdc017ff39',
+      important: [
+        { at: 'def:whatis', say: 'whatis: a name told', weight: 2 },
+        { at: 'def:pexpr', say: 'an expression printed, by op', weight: 1 },
+      ],
+    },
+    'util.c': {
+      summary: "Symbols made acid variables (varsym), the registers as variables (varreg), strings.",
+      digest: '5d1ac4b6909a',
+      important: [
+        { at: 'def:varsym', say: "each program symbol an acid variable: its address", weight: 3 },
+        { at: 'def:varreg', say: 'the registers: variables read from the map', weight: 2 },
+        { at: 'def:loadvars', say: 'pid, bpinst, fnbound...: the preset variables', weight: 1 },
+      ],
+    },
+    'globals.c': {
+      summary: "The interpreter's globals: the maps, the output buffer, flags.",
+      digest: 'eeb41284e876',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('acid: statements read, executed, the process driven by /proc', 'main.c:def:main', [
+      ['lex.c:def:yylex', "the tokens, for yacc's yyparse", 'yyparse pulls tokens'],
+      ['exec.c:def:execute', "a statement: dbg.y's rules hand it their tree", 'a statement parsed'],
+      ['expr.c:def:expop', 'the operators, by op: expr(n) indexes it', 'an expression'],
+      ['expr.c:def:ocall', 'a call: a C builtin or an acid defn', 'OCALL'],
+      ['builtin.c:def:tab', 'the C builtins, by name', "s->builtin"],
+      ['proc.c:def:msg', 'a ctl message to the process', 'start, stop...'],
+      ['../../kernel/devices/sys/devproc.c', "the kernel's /proc: ctl, mem, regs", 'write /proc/<pid>/ctl'],
+    ], main_role='main: flags, the a.out (libmach), /lib/acid/*.acid loaded, the REPL'),
+    skeletons.parts('The interpreter: its parts', [
+      ['acid.h', 'the AST, the symbols, the values'],
+      ['lex.c', 'text to tokens'],
+      ['exec.c', 'statements; memory through maps'],
+      ['expr.c', 'expressions, an operator each'],
+      ['builtin.c', 'the C builtins: the world outside'],
+      ['proc.c', 'the processes, by /proc'],
+      ['../libmach/', 'executables, symbols, disassembly, maps'],
+    ], [
+      ['lex.c', 'exec.c', 'parsed trees'],
+      ['exec.c', 'expr.c', 'expressions'],
+      ['expr.c', 'builtin.c', 'calls to builtins'],
+      ['builtin.c', 'proc.c', 'process control'],
+      ['exec.c', '../libmach/', 'memory by Map'],
+      ['builtin.c', '../libmach/', 'symbols, stack traces'],
+    ]),
+    skeletons.parts('main.c: the program set up, then the REPL', [
+      ['main.c:def:main', 'flags, then the steps below, then the loop'],
+      ['main.c:def:attachfiles', 'the a.out and the process attached'],
+      ['main.c:def:readtext', 'crackhdr and syminit: libmach'],
+      ['main.c:def:loadmodule', 'an acid library parsed and run'],
+      ['main.c:def:gc', 'the heap collected at each statement'],
+    ], [
+      ['main.c:def:main', 'main.c:def:attachfiles', 'the file, the pid'],
+      ['main.c:def:attachfiles', 'main.c:def:readtext', 'the text file'],
+      ['main.c:def:main', 'main.c:def:loadmodule', 'port.acid, -l libraries'],
+    ]),
+    skeletons.parts('lex.c: inputs stacked, tokens read', [
+      ['lex.c:type:IOstack', 'the inputs: files and strings, stacked'],
+      ['lex.c:def:pushfile', 'a file pushed (nil: stdin)'],
+      ['lex.c:def:lexc', 'a character, from the top input'],
+      ['lex.c:def:yylex', 'a token'],
+      ['lex.c:def:look', 'a name found in the symbol table'],
+    ], [
+      ['lex.c:def:pushfile', 'lex.c:type:IOstack', 'a new top'],
+      ['lex.c:type:IOstack', 'lex.c:def:lexc', 'characters'],
+      ['lex.c:def:lexc', 'lex.c:def:yylex', 'characters'],
+      ['lex.c:def:yylex', 'lex.c:def:look', 'a name'],
+    ]),
+    skeletons.parts('exec.c: statements and memory', [
+      ['exec.c:def:execute', 'a statement, by op'],
+      ['exec.c:def:call', 'an acid function called'],
+      ['exec.c:def:indir', 'memory read by format'],
+      ['exec.c:def:windir', 'memory written'],
+      ['exec.c:def:error', 'longjmp to the REPL'],
+    ], [
+      ['exec.c:def:call', 'exec.c:def:execute', 'the body'],
+      ['exec.c:def:execute', 'exec.c:def:error', 'on failure'],
+    ]),
+    skeletons.parts('expr.c: one function per operator', [
+      ['expr.c:def:expop', 'the table: op to function'],
+      ['expr.c:def:ocall', 'a call'],
+      ['expr.c:def:oindm', '*p: memory'],
+      ['expr.c:def:oasgn', 'assignment'],
+      ['expr.c:def:oadd', 'arithmetic, by type'],
+    ], [
+      ['expr.c:def:expop', 'expr.c:def:ocall', 'OCALL'],
+      ['expr.c:def:expop', 'expr.c:def:oindm', 'OINDM'],
+      ['expr.c:def:expop', 'expr.c:def:oasgn', 'OASGN'],
+      ['expr.c:def:expop', 'expr.c:def:oadd', 'OADD'],
+    ]),
+    skeletons.parts('builtin.c: the table and its entries', [
+      ['builtin.c:def:installbuiltin', 'the table installed as symbols'],
+      ['builtin.c:def:tab', 'name to C function'],
+      ['builtin.c:def:newproc', 'new()'],
+      ['builtin.c:def:startstop', 'cont()'],
+      ['builtin.c:def:strace', 'the stack trace'],
+      ['builtin.c:def:bprint', 'print()'],
+    ], [
+      ['builtin.c:def:installbuiltin', 'builtin.c:def:tab', 'reads'],
+      ['builtin.c:def:tab', 'builtin.c:def:newproc', "'new'"],
+      ['builtin.c:def:tab', 'builtin.c:def:startstop', "'startstop'"],
+      ['builtin.c:def:tab', 'builtin.c:def:strace', "'strace'"],
+      ['builtin.c:def:tab', 'builtin.c:def:bprint', "'print'"],
+    ]),
+    skeletons.parts('proc.c: a process started or attached, then controlled', [
+      ['proc.c:def:nproc', 'a new process: fork, hang, exec'],
+      ['proc.c:def:sproc', 'a pid attached: its maps'],
+      ['proc.c:def:install', 'the list of processes'],
+      ['proc.c:def:msg', 'a ctl message written'],
+    ], [
+      ['proc.c:def:nproc', 'proc.c:def:msg', 'waitstop'],
+      ['proc.c:def:nproc', 'proc.c:def:sproc', 'the child'],
+      ['proc.c:def:sproc', 'proc.c:def:install', 'recorded'],
+    ]),
+    skeletons.parts('dot.c: complex types', [
+      ['dot.c:def:decl', 'a complex declaration'],
+      ['dot.c:def:buildtype', 'its members laid out'],
+      ['dot.c:def:odot', 'a.b resolved'],
+    ], [
+      ['dot.c:def:decl', 'dot.c:def:buildtype', 'members'],
+      ['dot.c:def:buildtype', 'dot.c:def:odot', 'the types it searches'],
+    ]),
+    skeletons.parts("list.c: acid's lists", [
+      ['list.c:def:construct', 'a list built'],
+      ['list.c:def:append', 'appended to'],
+      ['list.c:def:trlist', "a frame's variables as a list"],
+      ['list.c:def:listvar', 'one variable'],
+    ], [
+      ['list.c:def:trlist', 'list.c:def:listvar', 'each local and param'],
+    ]),
+    skeletons.parts('print.c: code printed back', [
+      ['print.c:def:whatis', 'whatis'],
+      ['print.c:def:pcode', 'a statement printed'],
+      ['print.c:def:pexpr', 'an expression printed'],
+    ], [
+      ['print.c:def:whatis', 'print.c:def:pcode', "a defn's body"],
+      ['print.c:def:pcode', 'print.c:def:pexpr', 'expressions'],
+    ]),
+    skeletons.parts("util.c: the program's names as acid variables", [
+      ['util.c:def:varsym', 'the symbols'],
+      ['util.c:def:varreg', 'the registers'],
+      ['util.c:def:strnode', 'strings as values'],
+    ], [
+      ['util.c:def:varsym', 'util.c:def:strnode', 'names'],
+      ['util.c:def:varreg', 'util.c:def:strnode', 'register names'],
+    ]),
+  ],
+}

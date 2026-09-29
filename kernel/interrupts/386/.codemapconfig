@@ -1,0 +1,123 @@
+// kernel/interrupts/386/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel_x86.nw (the ARM port is the book's subject).
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The PC's interrupts: the IDT's 256 gates, the 8259 controllers, trap() and the int 64 system call in C.",
+  files: {
+    'l_trap.s': {
+      digest: 'd7eb64b8f4f2',
+      summary: 'The vector table: a CALL per vector into a common path that builds a Ureg and calls trap().',
+      important: [
+        { at: 'comment:"global [[vectortable]](x86)"', say: '256 entries of 6 bytes: CALL, then the vector number', weight: 3 },
+        { at: 'def:intrcommon', say: 'registers pushed as a Ureg, kernel segments, trap()', weight: 3 },
+        { at: 'comment:"function [[_strayintrx]](x86)"', say: 'the CPU pushed an error code: no dummy needed', weight: 1 },
+        { at: 'comment:"function [[forkret]](x86)"', say: "a new process's first return to user mode", weight: 2 },
+      ],
+      related: ['trap.c'],
+    },
+    'trap.c': {
+      digest: '951246413691',
+      summary: 'Traps in C: the IDT filled, interrupts routed through Vctl lists, faults, system calls, notes.',
+      capitals: [
+        { at: 'def:trap', say: 'every x86 exception and interrupt lands here' },
+      ],
+      important: [
+        { at: 'def:trapinit0', say: 'the IDT: int 3 and int 64 open to user mode', weight: 3 },
+        { at: 'def:arch_intrenable', say: 'a driver claims an IRQ: a Vctl on its vector', weight: 2 },
+        { at: 'def:fault386', say: 'a page fault: cr2 to fault()', weight: 3 },
+        { at: 'def:syscall', say: 'int 64: the number in AX, the table called', weight: 3 },
+        { at: 'def:notify', say: 'a note delivered: the user handler set up', weight: 2 },
+        { at: 'def:arch_forkchild', say: "the child's kernel stack: returns 0 in forkret", weight: 1 },
+      ],
+      links: [
+        { from: 'def:trap', to: 'def:fault386' },
+        { from: 'def:syscall', to: 'def:notify' },
+      ],
+      related: ['l_trap.s', '../../syscalls/386/plan9l.s', '../arm/trap.c'],
+    },
+    'i8259.c': {
+      digest: 'a89db7432f9b',
+      summary: "The two cascaded 8259 interrupt controllers: masks, end of interrupt, level or edge (ELCR).",
+      important: [
+        { at: 'def:i8259init', say: 'the two chips programmed, IRQs from vector 32', weight: 3 },
+        { at: 'def:i8259isr', say: 'end of interrupt; spurious IRQ 7 and 15 told apart', weight: 2 },
+        { at: 'def:i8259enable', say: "an IRQ unmasked, its Vctl's isr and eoi set", weight: 2 },
+        { at: 'def:i8259off', say: 'all masked: the APIC takes over', weight: 1 },
+      ],
+    },
+    'dat_interrupts.h': {
+      digest: '41ff919c5759',
+      summary: 'The vector and IRQ numbers of the PC, and Vctl, the handler registered on a vector.',
+      important: [
+        { at: 'comment:"enum [[vector]](x86)"', say: 'exceptions 0-31, 8259 at 32, APIC from 65', weight: 2 },
+        { at: 'type:Vctl', say: "a vector's handlers, chained", weight: 2 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('x86 interrupts: the vector table to trap()', [
+      ['l_trap.s', 'the 256 entries: a Ureg built'],
+      ['trap.c', 'dispatch: faults, IRQs, system calls'],
+      ['i8259.c', 'the legacy interrupt controller'],
+      ['dat_interrupts.h', 'the vectors, and Vctl'],
+    ], [
+      ['l_trap.s', 'trap.c', 'a Ureg*'],
+      ['trap.c', 'i8259.c', 'isr, eoi through a Vctl'],
+      ['dat_interrupts.h', 'trap.c', 'vector numbers'],
+    ]),
+    {
+      name: 'An x86 trap: vector, trap(), handler',
+      bones: [
+        { at: 'l_trap.s:comment:"global [[vectortable]](x86)"', role: 'the IDT points here: one entry per vector' },
+        { at: 'l_trap.s:def:intrcommon', role: 'the Ureg built' },
+        { at: 'trap.c:def:trapinit0', role: 'the IDT filled' },
+        { at: 'trap.c:def:trap', role: 'dispatch by vector number' },
+        { at: 'trap.c:def:fault386', role: 'a page fault' },
+        { at: 'trap.c:def:syscall', role: 'int 64' },
+        { at: '../../syscalls/386/plan9l.s', role: 'the int 64 entry' },
+      ],
+      joints: [
+        { from: 'trap.c:def:trapinit0', to: 'l_trap.s:comment:"global [[vectortable]](x86)"', say: 'each gate its entry' },
+        { from: 'l_trap.s:comment:"global [[vectortable]](x86)"', to: 'l_trap.s:def:intrcommon', say: 'the vector number' },
+        { from: 'l_trap.s:def:intrcommon', to: 'trap.c:def:trap', say: 'a Ureg*' },
+        { from: 'trap.c:def:trap', to: 'trap.c:def:fault386', say: 'VectorPF' },
+        { from: '../../syscalls/386/plan9l.s', to: 'trap.c:def:syscall', say: '_syscallintr' },
+      ],
+    },
+    {
+      name: 'The vector table (l_trap.s)',
+      bones: [
+        { at: 'l_trap.s:comment:"global [[vectortable]](x86)"', role: 'CALL and a vector byte, 256 times' },
+        { at: 'l_trap.s:comment:"function [[_strayintr]](x86)"', role: 'no error code: a dummy pushed' },
+        { at: 'l_trap.s:comment:"function [[_strayintrx]](x86)"', role: 'the CPU pushed an error code' },
+        { at: 'l_trap.s:def:intrcommon', role: 'the Ureg completed' },
+        { at: 'l_trap.s:comment:"function [[forkret]](x86)"', role: 'the way back to user mode' },
+        { at: 'trap.c:def:trap', role: 'the C handler' },
+      ],
+      joints: [
+        { from: 'l_trap.s:comment:"global [[vectortable]](x86)"', to: 'l_trap.s:comment:"function [[_strayintr]](x86)"', say: 'most vectors' },
+        { from: 'l_trap.s:comment:"global [[vectortable]](x86)"', to: 'l_trap.s:comment:"function [[_strayintrx]](x86)"', say: 'faults with a code' },
+        { from: 'l_trap.s:comment:"function [[_strayintr]](x86)"', to: 'l_trap.s:def:intrcommon', say: 'the vector number' },
+        { from: 'l_trap.s:comment:"function [[_strayintrx]](x86)"', to: 'l_trap.s:def:intrcommon', say: 'the vector number' },
+        { from: 'l_trap.s:def:intrcommon', to: 'trap.c:def:trap', say: 'a Ureg*' },
+      ],
+    },
+    {
+      name: 'The 8259 pair (i8259.c)',
+      bones: [
+        { at: 'i8259.c:def:i8259init', role: 'both chips programmed' },
+        { at: 'i8259.c:def:i8259mask', role: 'which IRQs are off' },
+        { at: 'i8259.c:def:i8259enable', role: 'an IRQ unmasked for a Vctl' },
+        { at: 'i8259.c:def:i8259isr', role: 'end of interrupt' },
+        { at: 'trap.c:def:trap', role: 'calls the isr' },
+      ],
+      joints: [
+        { from: 'i8259.c:def:i8259init', to: 'i8259.c:def:i8259mask', say: 'all masked first' },
+        { from: 'i8259.c:def:i8259enable', to: 'i8259.c:def:i8259mask', say: 'a bit cleared' },
+        { from: 'trap.c:def:trap', to: 'i8259.c:def:i8259isr', say: "the Vctl's isr" },
+      ],
+    },
+  ],
+}

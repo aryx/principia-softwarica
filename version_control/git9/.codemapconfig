@@ -1,0 +1,321 @@
+// version_control/git9/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The book is VCS.nw. The git subcommands users type are rc
+// scripts beside the C (add.rc, commit.rc, pull.rc, push.rc, merge.rc...,
+// common.rc their shared functions): not sources for the map. They glue
+// the C programs below: git/walk for the status, git/save for a commit,
+// git/query for a revision, git/get and git/send across the network.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "git9: Git for Plan 9, rc scripts over small C tools; the repository served as a file system by git/fs.",
+  files: {
+    'git.h': {
+      summary: "Git's shared structures: Hash, Object (blob, tree, commit, tag), Dirent, Objset, the queues, Conn.",
+      digest: '5ffd1ddcd335',
+      capitals: [
+        { at: 'type:Object', say: 'a blob, tree, commit or tag, cached' },
+        { at: 'type:Hash', say: 'a SHA-1: every object named by its content' },
+        { at: 'type:Conn', say: 'a connection to a remote, pkt-lines' },
+      ],
+      important: [
+        { at: 'type:Dirent', say: 'a tree entry: mode, name, hash', weight: 2 },
+        { at: 'type:Cinfo', say: 'a commit: parents, tree, author, message', weight: 2 },
+        { at: 'type:Objset', say: 'a hash set of objects: seen, ours, theirs', weight: 1 },
+        { at: 'type:Idxent', say: 'an index entry: path, qid, mode, state', weight: 1 },
+      ],
+    },
+    'pack.c': {
+      summary: 'The object store: loose objects and packs read (inflate, deltas), parsed, cached; packs written and indexed.',
+      digest: '2f621210e7e7',
+      capitals: [
+        { at: 'def:readobject', say: 'an object by hash: cache, pack or loose' },
+        { at: 'def:writepack', say: 'the objects they lack, as a pack' },
+      ],
+      important: [
+        { at: 'def:cache', say: 'an LRU of parsed objects', weight: 1 },
+        { at: 'def:searchindex', say: 'a hash found in a .idx by its fanout', weight: 2 },
+        { at: 'def:readpacked', say: 'an object at an offset: header, inflate', weight: 2 },
+        { at: 'def:applydelta', say: 'copy and insert ops against a base', weight: 3 },
+        { at: 'def:parseobject', say: 'raw bytes to a commit, tree or tag', weight: 1 },
+        { at: 'def:indexpack', say: 'a received pack scanned: its .idx written', weight: 2 },
+        { at: 'def:pickdeltas', say: 'which object to deltify against which', weight: 2 },
+        { at: 'def:genpack', say: 'the pack bytes: headers, deltas, compressed', weight: 1 },
+      ],
+      links: [
+        { from: 'def:readobject', to: 'def:readidxobject' },
+        { from: 'def:readidxobject', to: 'def:readpacked' },
+        { from: 'def:writepack', to: 'def:genpack' },
+      ],
+    },
+    'delta.c': {
+      summary: 'Delta compression for packs: the base cut in content-defined blocks (a gear hash), matches emitted as copies.',
+      digest: '0b6b71818d21',
+      capitals: [{ at: 'def:deltify', say: 'an object as copies from its base' }],
+      important: [
+        { at: 'def:nextblk', say: 'block boundaries by a rolling gear hash', weight: 2 },
+        { at: 'def:dtinit', say: "the base's blocks in a hash table", weight: 1 },
+        { at: 'def:stretch', say: 'a match extended past its block', weight: 1 },
+      ],
+    },
+    'ref.c': {
+      summary: "Revisions: refs read, and git9's query language (a ~ ^ @ ..) evaluated to commits; the graph painted.",
+      digest: '90c873f00ff9',
+      capitals: [{ at: 'def:resolveref', say: 'a name to a hash' }],
+      important: [
+        { at: 'type:Eval', say: 'the query evaluator: a stack of commits', weight: 1 },
+        { at: 'def:evalpostfix', say: 'one step of a query: name, ^, ~, @', weight: 2 },
+        { at: 'def:paint', say: 'the commit graph painted from both ends', weight: 3 },
+        { at: 'def:findtwixt', say: 'commits reachable from ours, not theirs', weight: 2 },
+        { at: 'def:lca', say: 'the merge base: a lowest common ancestor', weight: 2 },
+        { at: 'def:listrefs', say: 'every ref under .git/refs', weight: 1 },
+      ],
+    },
+    'proto.c': {
+      summary: "The wire protocol: pkt-lines, capabilities, and connecting by git://, ssh, http(s) or a local repository.",
+      digest: '1296c201df2b',
+      capitals: [{ at: 'def:gitconnect', say: 'a URL to a connection, by its scheme' }],
+      important: [
+        { at: 'def:readpkt', say: 'a pkt-line: 4 hex digits of length', weight: 2 },
+        { at: 'def:parsecaps', say: "the server's capabilities, after the first ref", weight: 1 },
+        { at: 'def:dialssh', say: 'ssh: a remote git-upload-pack run', weight: 1 },
+        { at: 'def:webclone', say: 'smart http: each phase a new request', weight: 2 },
+      ],
+    },
+    'util.c': {
+      summary: "git9's helpers: finding and opening the repository, hashes parsed and compared, the object queues.",
+      digest: 'ce8fd1bb727a',
+      capitals: [{ at: 'def:gitinit', say: 'every tool starts here: the repo found' }],
+      important: [
+        { at: 'def:entcmp', say: "Git's tree order: a directory sorts with a slash", weight: 2 },
+        { at: 'def:hparse', say: '40 hex digits to a Hash', weight: 1 },
+        { at: 'def:qput', say: 'a commit queue ordered by date', weight: 1 },
+      ],
+    },
+    'objset.c': {
+      summary: 'A set of objects: an open-addressed hash table keyed by the SHA-1.',
+      digest: 'ddf49fa55fd1',
+    },
+    'ols.c': {
+      summary: "Every object in the repository listed, loose then packed: git/fs's object directory.",
+      digest: 'a1ac64ef76be',
+      capitals: [{ at: 'def:olsnext', say: 'the next object: loose dirs, then .idx' }],
+      important: [
+        { at: 'def:olsreadloose', say: '.git/objects/xx/ scanned', weight: 1 },
+        { at: 'def:olsreadpacked', say: "a pack's hashes from its .idx", weight: 1 },
+      ],
+    },
+    'fs.c': {
+      summary: 'git/fs: the repository as a file system on /mnt/git: branches, commits, trees, objects as files.',
+      digest: 'd6a6c1849393',
+      capitals: [{ at: 'def:gitsrv', say: 'the 9P handlers, lib9p calls them' }],
+      important: [
+        { at: 'type:Gitaux', say: "a fid's place: a path of Crumbs", weight: 2 },
+        { at: 'type:Crumb', say: 'a step in the tree: its object, its qid', weight: 1 },
+        { at: 'def:qpath', say: 'stable qids for (object, parent) pairs', weight: 2 },
+        { at: 'def:gitwalk1', say: 'a walk: branch/, object/, a commit, a tree', weight: 3 },
+        { at: 'def:objread', say: 'a directory read: a tree or a commit', weight: 2 },
+        { at: 'def:readctl', say: '/mnt/git/ctl: the repo and branch', weight: 1 },
+      ],
+    },
+    'walk.c': {
+      summary: 'git/walk: the status: the index, the working tree and HEAD compared, files as A, M, R, T or U.',
+      digest: '334284842cd4',
+      capitals: [{ at: 'def:main', say: 'index against working dir against HEAD' }],
+      important: [
+        { at: 'type:Idxent', say: 'a path and its state letter', weight: 2 },
+        { at: 'def:loadwdir', say: 'the working tree walked', weight: 1 },
+        { at: 'def:samedata', say: 'qid first, then bytes: changed?', weight: 3 },
+        { at: 'def:checkedin', say: 'is it in HEAD, via /mnt/git', weight: 2 },
+      ],
+    },
+    'save.c': {
+      summary: 'git/save: the index written as trees and blobs, then a commit object: the core of git commit.',
+      digest: '0d43cbe5770d',
+      capitals: [{ at: 'def:treeify', say: 'the files to trees, bottom up' }],
+      important: [
+        { at: 'def:writeobj', say: 'header, SHA-1, zlib: a loose object', weight: 3 },
+        { at: 'def:blobify', say: 'a file as a blob', weight: 1 },
+        { at: 'def:mkcommit', say: 'tree, parents, author, message', weight: 2 },
+      ],
+    },
+    'query.c': {
+      summary: 'git/query: a revision expression resolved to hashes, or the changes between commits.',
+      digest: '104bb2fb04a2',
+      capitals: [{ at: 'def:main', say: 'a query to hashes; -c: the changes' }],
+      important: [{ at: 'def:difftrees', say: 'two trees walked in parallel', weight: 2 }],
+    },
+    'log.c': {
+      summary: 'git/log: commits shown newest first from a ref or a query, filtered by paths.',
+      digest: '8cb82764f321',
+      capitals: [{ at: 'def:main', say: 'a query, or a walk back from HEAD' }],
+      important: [
+        { at: 'def:showcommits', say: 'a date-ordered queue of commits', weight: 2 },
+        { at: 'def:matchesfilter', say: 'did the commit touch these paths', weight: 1 },
+      ],
+    },
+    'get.c': {
+      summary: 'git/get: fetch; refs negotiated with the remote, a pack received and indexed, refs written.',
+      digest: '8fa7ffc73b18',
+      capitals: [{ at: 'def:fetchpack', say: 'want/have, then the pack' }],
+      important: [
+        { at: 'comment:Checks the rules for a refname', say: "a remote's ref names checked", weight: 1 },
+        { at: 'def:enqueueparent', say: 'haves sent walking back our history', weight: 2 },
+        { at: 'def:sbread', say: 'side-band: pack, progress, errors', weight: 1 },
+      ],
+    },
+    'send.c': {
+      summary: "git/send: push; the remote's refs read, the objects it lacks packed and sent, its refs updated.",
+      digest: 'd39fda484e6c',
+      capitals: [{ at: 'def:sendpack', say: 'refs compared, a pack sent' }],
+      important: [
+        { at: 'def:readours', say: 'our branches, and the ones to delete', weight: 1 },
+        { at: 'code:"ancestor(a, b)"', say: 'no force: theirs must be an ancestor', weight: 2 },
+      ],
+    },
+    'serve.c': {
+      summary: 'git/serve: the server side of fetch (upload-pack) and push (receive-pack), for git:// or ssh.',
+      digest: 'd948df7ffc89',
+      capitals: [{ at: 'def:main', say: 'upload or receive, by the command read' }],
+      important: [
+        { at: 'def:servnegotiate', say: 'the client wants and haves', weight: 2 },
+        { at: 'def:updaterefs', say: 'pushed refs, repo locked, old hash checked', weight: 2 },
+      ],
+    },
+    'repack.c': {
+      summary: 'git/repack: every object reachable from the refs into a single pack.',
+      digest: '66a1e458799f',
+    },
+    'conf.c': {
+      summary: 'git/conf: keys read from .git/config (or the user one), or the repository root.',
+      digest: 'ed985b8d7207',
+    },
+  },
+  skeletons: [
+    skeletons.parts('git9: tools over the object store', [
+      ['git.h', 'objects, hashes: what all share'],
+      ['pack.c', 'the object store: read and written'],
+      ['ref.c', 'names and queries to commits'],
+      ['fs.c', 'git/fs: the repository as files'],
+      ['walk.c', 'git/walk: the status'],
+      ['save.c', 'git/save: a commit written'],
+      ['proto.c', 'the wire protocol'],
+      ['get.c', 'git/get: fetch'],
+      ['send.c', 'git/send: push'],
+      ['serve.c', 'git/serve: the other end'],
+    ], [
+      ['walk.c', 'fs.c', 'HEAD read through /mnt/git'],
+      ['fs.c', 'pack.c', 'readobject'],
+      ['save.c', 'pack.c', 'objects written'],
+      ['ref.c', 'pack.c', 'commits read'],
+      ['get.c', 'proto.c', 'a connection'],
+      ['send.c', 'proto.c', 'a connection'],
+      ['proto.c', 'serve.c', 'pkt-lines, over the network'],
+      ['send.c', 'pack.c', 'writepack'],
+      ['get.c', 'pack.c', 'indexpack'],
+    ]),
+    skeletons.cmd('git/fs: a repository served', 'fs.c:def:main', [
+      ['util.c:def:gitinit', 'the repository found', 'first'],
+      ['fs.c:def:gitsrv', 'the 9P handlers mounted on /mnt/git', 'postmountsrv'],
+      ['fs.c:def:gitwalk1', 'a path walked: branch, commit, tree', 'Twalk'],
+      ['fs.c:def:gitread', 'a file or directory read', 'Tread'],
+      ['pack.c:def:readobject', 'the object behind it', 'a hash'],
+    ]),
+    skeletons.chain('pack.c: an object read, a pack written', [
+      ['pack.c:def:readobject', 'by hash: the cache first', ''],
+      ['pack.c:def:readidxobject', 'a loose file or a pack', 'a miss'],
+      ['pack.c:def:searchindex', 'its offset in a .idx', 'packed'],
+      ['pack.c:def:readpacked', 'inflated at the offset', 'the offset'],
+      ['pack.c:def:applydelta', 'a delta against its base', 'a delta'],
+      ['pack.c:def:parseobject', 'the bytes parsed', 'the bytes'],
+    ]),
+    skeletons.chain('pack.c: writing a pack', [
+      ['pack.c:def:writepack', 'ours minus theirs', ''],
+      ['pack.c:def:readmeta', 'the objects to send', 'the commits'],
+      ['pack.c:def:pickdeltas', 'deltas chosen', 'metas'],
+      ['delta.c:def:deltify', 'a delta computed', 'a pair'],
+      ['pack.c:def:genpack', 'the pack written', 'deltas'],
+    ]),
+    skeletons.chain('delta.c: a delta computed', [
+      ['delta.c:def:dtinit', "the base's blocks hashed", ''],
+      ['delta.c:def:nextblk', 'boundaries by the gear hash', 'the base'],
+      ['delta.c:def:deltify', 'the target scanned', 'the table'],
+      ['delta.c:def:lookup', 'a block of the base found', 'each block'],
+      ['delta.c:def:stretch', 'the match grown', 'a match'],
+      ['delta.c:def:emitdelta', 'a copy or an insert', 'the run'],
+    ]),
+    skeletons.chain('ref.c: a query evaluated', [
+      ['ref.c:def:resolverefs', 'a query to hashes', ''],
+      ['ref.c:def:evalexpr', 'the expression, left to right', 'parsed'],
+      ['ref.c:def:evalpostfix', 'a name then ^ ~ @', 'each term'],
+      ['ref.c:def:readref', 'a name to a hash', 'a name'],
+      ['ref.c:def:lca', 'the common ancestor', 'a @'],
+      ['ref.c:def:paint', 'the graph painted', 'by painting'],
+    ]),
+    skeletons.chain('proto.c: connecting to a remote', [
+      ['proto.c:def:gitconnect', 'a URL to a Conn', ''],
+      ['proto.c:def:parseuri', 'scheme, host, port, path', 'the URL'],
+      ['proto.c:def:dialgit', 'git://: a TCP connection', 'git'],
+      ['proto.c:def:githandshake', 'the service requested', 'connected'],
+      ['proto.c:def:readpkt', 'pkt-lines read', 'then'],
+    ]),
+    skeletons.chain('util.c: what every tool starts with', [
+      ['util.c:def:gitinit', 'the repository found and opened', ''],
+      ['util.c:def:findrepo', 'up to the .git', 'from here'],
+      ['util.c:def:hparse', 'hashes read from text', 'refs'],
+      ['util.c:def:qput', 'commits queued by date', 'walks'],
+    ]),
+    skeletons.chain('ols.c: listing every object', [
+      ['ols.c:def:mkols', 'a listing begun', ''],
+      ['ols.c:def:olsnext', 'the next hash', 'each call'],
+      ['ols.c:def:olsreadloose', 'loose objects first', 'first'],
+      ['ols.c:def:olsreadpacked', "then each pack's index", 'then'],
+    ]),
+    skeletons.cmd('git/walk: the status', 'walk.c:def:main', [
+      ['walk.c:def:loadwdir', 'the working tree listed', 'paths'],
+      ['walk.c:def:checkedin', 'in HEAD?', 'each path'],
+      ['walk.c:def:samedata', 'changed since?', 'both'],
+      ['walk.c:def:show', 'its state letter printed', 'the state'],
+    ]),
+    skeletons.cmd('git/save: a commit written', 'save.c:def:main', [
+      ['save.c:def:treeify', 'the files to trees', 'the paths'],
+      ['save.c:def:blobify', 'each file a blob', 'a file'],
+      ['save.c:def:writeobj', 'a loose object written', 'the bytes'],
+      ['save.c:def:mkcommit', 'the commit, over the root tree', 'the tree'],
+    ]),
+    skeletons.cmd('git/query: revisions', 'query.c:def:main', [
+      ['ref.c:def:resolverefs', 'the query to hashes', 'the query'],
+      ['query.c:def:diffcommits', '-c: what changed', 'two commits'],
+      ['query.c:def:difftrees', 'trees compared', 'their trees'],
+    ]),
+    skeletons.cmd('git/log: history', 'log.c:def:main', [
+      ['log.c:def:showcommits', 'walking back from a commit', 'no query'],
+      ['log.c:def:matchesfilter', 'kept if it touched the paths', 'each commit'],
+      ['log.c:def:show', 'printed', 'kept'],
+    ]),
+    skeletons.cmd('git/get: fetch', 'get.c:def:main', [
+      ['proto.c:def:gitconnect', 'upload-pack at the remote', 'the URL'],
+      ['get.c:def:fetchpack', 'refs, wants, haves', 'the Conn'],
+      ['pack.c:def:indexpack', 'the pack received, indexed', 'the pack'],
+    ]),
+    skeletons.cmd('git/send: push', 'send.c:def:main', [
+      ['proto.c:def:gitconnect', 'receive-pack at the remote', 'the URL'],
+      ['send.c:def:sendpack', 'refs compared, updates sent', 'the Conn'],
+      ['pack.c:def:writepack', 'the objects they lack', 'ours, theirs'],
+    ]),
+    skeletons.cmd('git/serve: the server', 'serve.c:def:main', [
+      ['serve.c:def:servpack', 'upload-pack: a fetch served', 'git-upload-pack'],
+      ['serve.c:def:servnegotiate', 'wants and haves', 'negotiation'],
+      ['serve.c:def:recvpack', 'receive-pack: a push taken', 'git-receive-pack'],
+      ['serve.c:def:updaterefs', 'refs moved, under a lock', 'the pack'],
+    ]),
+    skeletons.cmd('git/repack: one pack', 'repack.c:def:main', [
+      ['ref.c:def:listrefs', 'every ref', 'first'],
+      ['pack.c:def:writepack', 'all they reach, packed', 'the refs'],
+      ['pack.c:def:indexpack', 'its index', 'the pack'],
+    ]),
+    skeletons.cmd('git/conf: configuration', 'conf.c:def:main', [
+      ['conf.c:def:showconf', 'a key looked up in the file', 'each key'],
+    ]),
+  ],
+}

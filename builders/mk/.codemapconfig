@@ -1,0 +1,367 @@
+// builders/mk/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// From Make.nw's "Software architecture": parse the mkfile, build the
+// dependency graph for a target, find what is out of date (work), and
+// schedule jobs running the recipes in a shell. mkfile -> lines -> words
+// -> rules and meta-rules -> graph -> jobs. Posix.c is the Unix port,
+// not in the mkfile (Plan9.c is built instead).
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "mk, Plan 9's make (Hume, 1987): a mkfile's rules and %-meta-rules to a dependency graph, recipes run in rc, in parallel.",
+  files: {
+    'main.c': {
+      summary: 'The entry: flags and var=value arguments, the mkfile parsed, then mk() for each target.',
+      digest: '4f2d42bb882b',
+      capitals: [{ at: 'def:main', say: "mk's entry: parse, then mk(target)" }],
+      important: [
+        { at: 'comment:argv processing part 2, xxx=yyy', say: 'var=value arguments parsed as a mkfile', weight: 1 },
+        { at: 'comment:parsing mkfile, call [[parse()]]', say: 'the mkfile (or -f file) read', weight: 3 },
+        { at: 'comment:setting the targets, call [[mk()]]', say: 'the first target, or those given', weight: 2 },
+      ],
+      links: [
+        { from: 'def:main', to: 'parse.c:def:parse' },
+        { from: 'def:main', to: 'mk.c:def:mk' },
+      ],
+    },
+    'mk.h': {
+      summary: "mk's data: rules, the graph's nodes and arcs, jobs, words, the symbol table, growing buffers.",
+      digest: '05b463944fea',
+      capitals: [
+        { at: 'comment:"struct [[Node]]"', say: 'a file in the graph: its time and state' },
+        { at: 'comment:"struct [[Rule]]"', say: 'targets : prerequisites, and a recipe' },
+        { at: 'comment:"struct [[Arc]]"', say: 'a dependency, labelled with its rule' },
+      ],
+      important: [
+        { at: 'comment:"enum [[Node_flag]]"', say: 'NOTMADE, BEINGMADE, MADE: the progress', weight: 2 },
+        { at: 'comment:"struct [[Job]]"', say: 'a recipe to run, with its targets', weight: 2 },
+        { at: 'comment:"struct [[Symtab]]"', say: 'one table for variables, targets, rules...', weight: 1 },
+        { at: 'comment:"enum [[Rule_attr]]"', say: 'attributes: :V: virtual, :P: prog, :Q: quiet', weight: 1 },
+        { at: 'comment:"struct [[Bufblock]]"', say: 'a growing buffer, used everywhere', weight: 1 },
+      ],
+    },
+    'fns.h': {
+      summary: "The functions shared between mk's files, by stage: buffers, words, symbols, parse, graph, run.",
+      digest: 'd285941802e2',
+    },
+    'mk.c': {
+      summary: 'The driver: the graph built, then work() finds out-of-date nodes and starts their recipes until the root is made.',
+      digest: '869a2203bc81',
+      capitals: [{ at: 'def:mk', say: 'a target made: graph, then work until MADE' }],
+      important: [
+        { at: 'code:"while(root->flags&NOTMADE)"', say: 'work again, or wait for a job to finish', weight: 3 },
+        { at: 'comment:"function [[work]]"', say: 'depth first: prerequisites before targets', weight: 3 },
+        { at: 'comment:"function [[outofdate]]"', say: 'older than a prerequisite, or missing', weight: 2 },
+        { at: 'comment:"function [[update]]"', say: 'a job done: its nodes MADE, times read', weight: 2 },
+        { at: 'comment:"function [[clrmade]]"', say: 'every node reset before a target', weight: 1 },
+      ],
+      links: [
+        { from: 'def:mk', to: 'graph.c:def:graph' },
+        { from: 'def:mk', to: 'run.c:def:waitup' },
+      ],
+    },
+    'parse.c': {
+      summary: 'The mkfile parser: lines to variable assignments, rules and meta-rules; <file and <|command included.',
+      digest: '9cba03fe0cfd',
+      capitals: [{ at: 'def:parse', say: 'a mkfile read: variables and rules' }],
+      important: [
+        { at: 'comment:"function [[rhead]]"', say: 'a line split at = or :, attributes read', weight: 2 },
+        { at: 'comment:"function [[rbody]]"', say: 'the recipe: the lines starting with a tab', weight: 1 },
+        { at: 'def:addrules', say: 'each target of the line its rule', weight: 1 },
+        { at: 'comment:"function [[ipush]]"', say: 'an include: a stack of inputs', weight: 1 },
+      ],
+      links: [{ from: 'def:parse', to: 'lex.c:def:assline' }],
+    },
+    'lex.c': {
+      summary: 'The lexer: a logical line assembled (comments dropped, backslash-newlines joined, `...` run).',
+      digest: '5c75b521af14',
+      important: [
+        { at: 'def:assline', say: 'the next logical line of the mkfile', weight: 2 },
+        { at: 'comment:"function [[bquote]]"', say: '`cmd`: rc runs it at parse time', weight: 2 },
+      ],
+    },
+    'varsub.c': {
+      summary: 'Variables expanded in a line: $x, ${x}, ${x:a%b=c%d} substitutions; the line split into words.',
+      digest: '89a3e9a2750b',
+      important: [
+        { at: 'comment:"function [[varsub]]"', say: '$ at the cursor: its value as words', weight: 2 },
+        { at: 'comment:"function [[subsub]]"', say: '${x:%.c=%.5}: a pattern substitution', weight: 2 },
+        { at: 'comment:"function [[nextword]]"', say: 'a line cut into words, quotes kept', weight: 1 },
+        { at: 'comment:"function [[stow]]"', say: 'a word into its buffer', weight: 1 },
+      ],
+    },
+    'rule.c': {
+      summary: 'Rules added: a plain rule under its target in the symbol table, a %-rule or regexp rule to the meta-rules.',
+      digest: 'b454ee758832',
+      important: [{ at: 'def:addrule', say: 'a rule filed as simple or meta', weight: 2 }],
+    },
+    'graph.c': {
+      summary: 'The dependency graph built from the target down, rules and meta-rules applied; cycles and ambiguity checked.',
+      digest: 'af53abdbc6dc',
+      capitals: [{ at: 'def:graph', say: 'the graph under a target, built once' }],
+      important: [
+        { at: 'def:applyrules', say: 'a node: the rules naming it, meta-rules matched', weight: 3 },
+        { at: 'comment:"function [[vacuous]]"', say: 'a node from meta-rules only, leading nowhere: cut', weight: 2 },
+        { at: 'comment:"function [[cyclechk]]"', say: 'a dependency cycle is an error', weight: 1 },
+        { at: 'comment:"function [[ambiguous]]"', say: 'two recipes for one node: which one?', weight: 1 },
+        { at: 'def:nreps', say: 'how often a meta-rule may recurse ($NREP)', weight: 1 },
+      ],
+    },
+    'match.c': {
+      summary: "Meta-rules' patterns: a name matched against a target with % (the stem), and the stem substituted back.",
+      digest: '552cf64153db',
+      important: [
+        { at: 'def:match', say: '%.5 against hello.5: stem hello', weight: 2 },
+        { at: 'def:subst', say: '%.c with that stem: hello.c', weight: 1 },
+      ],
+    },
+    'recipe.c': {
+      summary: "An out-of-date node's recipe prepared: its rule's targets and prerequisites set as $target, $prereq...",
+      digest: '9cc9efc9426c',
+      important: [
+        { at: 'def:dorecipe', say: 'the master rule found, a job made, run', weight: 3 },
+        { at: 'def:newjob', say: 'a job: the recipe and its variables', weight: 1 },
+      ],
+      links: [{ from: 'def:dorecipe', to: 'run.c:def:run' }],
+    },
+    'run.c': {
+      summary: 'The jobs: queued, run up to $NPROC at once in rc, waited for, their nodes updated.',
+      digest: '9e36b63caa22',
+      capitals: [{ at: 'def:waitup', say: 'a child done: its job updated' }],
+      important: [
+        { at: 'def:run', say: 'a job queued; scheduled if a slot is free', weight: 2 },
+        { at: 'comment:"function [[sched]]"', say: 'the next job: its recipe given to rc', weight: 3 },
+        { at: 'type:RunEvent', say: 'a slot per processor: its pid and job', weight: 1 },
+        { at: 'comment:"function [[killchildren]]"', say: 'interrupted: every recipe killed', weight: 1 },
+      ],
+      links: [{ from: 'def:waitup', to: 'mk.c:def:update' }],
+    },
+    'Plan9.c': {
+      summary: 'What is Plan 9 in mk: the environment to and from /env, file times, recipes run by rc, notes.',
+      digest: '1dc26729d5f2',
+      important: [
+        { at: 'def:execsh', say: 'rc -e run, the recipe fed on its stdin', weight: 3 },
+        { at: 'def:exportenv', say: "variables written to /env for the recipe's rc", weight: 2 },
+        { at: 'def:readenv', say: '/env read at start', weight: 1 },
+        { at: 'def:pipecmd', say: '<|cmd and `cmd`: output read back', weight: 1 },
+        { at: 'def:mkmtime', say: "a file's time (dirstat)", weight: 1 },
+      ],
+    },
+    'Posix.c': {
+      summary: 'The Unix port: environ, stat, sh or rc forked with fork/exec, signals. Not built here, Plan9.c is.',
+      digest: 'ca45585ffbec',
+      important: [{ at: 'def:execsh', say: 'the recipe run by the shell', weight: 1 }],
+    },
+    'env.c': {
+      summary: "The recipe's environment: mk's own variables ($target, $prereq, $stem...) set for each job.",
+      digest: '37d39013b20b',
+      important: [
+        { at: 'def:buildenv', say: "a job's variables: its targets, prerequisites, stem", weight: 2 },
+        { at: 'def:initenv', say: 'the special names registered', weight: 1 },
+      ],
+    },
+    'rc.c': {
+      summary: "What depends on the recipe shell's syntax (rc's): quoting, escapes, where a variable name ends.",
+      digest: 'ad9ce1466089',
+      important: [{ at: 'def:charin', say: 'a character searched outside quotes', weight: 1 }],
+    },
+    'archive.c': {
+      summary: 'Targets inside archives, lib.a(member): the member times read from the archive.',
+      digest: '3d19a4f4b714',
+      important: [{ at: 'def:atimeof', say: "a member's time", weight: 1 }],
+    },
+    'file.c': {
+      summary: "Files' times, kept in the symbol table, and touch and delete for -t and failed recipes.",
+      digest: '5c7791e0c268',
+      important: [{ at: 'def:timeof', say: "a file's time, cached", weight: 2 }],
+    },
+    'symtab.c': {
+      summary: 'The symbol table: one hash of (name, namespace) for variables, targets, rules, times.',
+      digest: '6025e4c7892b',
+      important: [{ at: 'def:symlook', say: 'find, or add', weight: 2 }],
+    },
+    'shprint.c': {
+      summary: 'A recipe printed before it runs, its variables expanded as rc would.',
+      digest: '2cddab6b1209',
+    },
+    'bufblock.c': {
+      summary: 'Growing buffers, recycled through a free list.',
+      digest: 'ff2727e27ff4',
+    },
+    'word.c': {
+      summary: 'Word lists: made, duplicated, joined to a string.',
+      digest: '61ff6137e285',
+    },
+    'var.c': {
+      summary: 'Variables set in the symbol table; the shell-legal names.',
+      digest: 'c732da29f06f',
+    },
+    'dumpers.c': {
+      summary: 'Debug dumps (-d): rules, nodes, jobs, variables.',
+      digest: 'fcd8d5ea5116',
+    },
+    'globals.c': {
+      summary: "mk's globals: the rules and meta-rules, the flags, the first target, the jobs.",
+      digest: '546a87b54c81',
+      important: [
+        { at: 'def:rules', say: 'the plain rules', weight: 1 },
+        { at: 'def:metarules', say: 'the % rules', weight: 1 },
+        { at: 'def:target1', say: 'the default target: the first', weight: 1 },
+      ],
+    },
+    'utils.c': {
+      summary: 'Malloc and Realloc that never return nil.',
+      digest: '53579a4b88c1',
+    },
+  },
+  skeletons: [
+    {
+      name: 'mk: parse, graph, work, run (Make.nw, control flow)',
+      bones: [
+        { at: 'main.c:def:main', role: 'flags, then parse and mk' },
+        { at: 'parse.c:def:parse', role: 'the mkfile to rules and variables' },
+        { at: 'lex.c:def:assline', role: 'a logical line' },
+        { at: 'mk.c:def:mk', role: 'a target: graph, then work until made' },
+        { at: 'graph.c:def:graph', role: 'the dependency graph, once' },
+        { at: 'graph.c:def:applyrules', role: 'a node expanded by the rules' },
+        { at: 'mk.c:comment:"function [[work]]"', role: 'out-of-date nodes found, depth first' },
+        { at: 'recipe.c:def:dorecipe', role: "a node's recipe as a job" },
+        { at: 'run.c:def:run', role: 'the job queued' },
+        { at: 'run.c:comment:"function [[sched]]"', role: 'a job started on a free slot' },
+        { at: 'Plan9.c:def:execsh', role: 'rc runs the recipe' },
+        { at: 'run.c:def:waitup', role: 'a job finished: its nodes updated' },
+      ],
+      joints: [
+        { from: 'main.c:def:main', to: 'parse.c:def:parse', say: 'the mkfile' },
+        { from: 'parse.c:def:parse', to: 'lex.c:def:assline', say: 'lines' },
+        { from: 'main.c:def:main', to: 'mk.c:def:mk', say: 'each target' },
+        { from: 'mk.c:def:mk', to: 'graph.c:def:graph', say: 'the target' },
+        { from: 'graph.c:def:graph', to: 'graph.c:def:applyrules', say: 'the root, recursively' },
+        { from: 'mk.c:def:mk', to: 'mk.c:comment:"function [[work]]"', say: 'the graph, in a loop' },
+        { from: 'mk.c:comment:"function [[work]]"', to: 'recipe.c:def:dorecipe', say: 'an out-of-date node' },
+        { from: 'recipe.c:def:dorecipe', to: 'run.c:def:run', say: 'a job' },
+        { from: 'run.c:def:run', to: 'run.c:comment:"function [[sched]]"', say: 'if a slot is free' },
+        { from: 'run.c:comment:"function [[sched]]"', to: 'Plan9.c:def:execsh', say: 'the recipe, the environment' },
+        { from: 'mk.c:def:mk', to: 'run.c:def:waitup', say: 'nothing to start: wait' },
+        { from: 'run.c:def:waitup', to: 'run.c:comment:"function [[sched]]"', say: 'a slot free again' },
+      ],
+    },
+    skeletons.parts("mk's files: a pipeline", [
+      ['parse.c', 'the mkfile read (lex.c, varsub.c)'],
+      ['rule.c', 'rules and meta-rules filed'],
+      ['graph.c', 'the graph for a target'],
+      ['mk.c', 'the driver: what is out of date'],
+      ['recipe.c', 'a recipe made a job'],
+      ['run.c', 'the jobs, in parallel'],
+      ['Plan9.c', 'the OS: rc, /env, file times'],
+      ['mk.h', 'the data they share'],
+    ], [
+      ['parse.c', 'rule.c', 'rules'],
+      ['rule.c', 'graph.c', 'rules and meta-rules'],
+      ['graph.c', 'mk.c', 'the graph'],
+      ['mk.c', 'recipe.c', 'an outdated node'],
+      ['recipe.c', 'run.c', 'a job'],
+      ['run.c', 'Plan9.c', 'execsh, wait'],
+      ['run.c', 'mk.c', 'update: the node made'],
+    ]),
+    skeletons.chain('main.c: from the command line to mk()', [
+      ['main.c:def:main', 'flags: -f -n -t -a -k...', ''],
+      ['main.c:comment:argv processing part 2, xxx=yyy', 'var=value, as a mkfile', 'then'],
+      ['main.c:comment:parsing mkfile, call [[parse()]]', 'the mkfile parsed', 'then'],
+      ['main.c:comment:setting the targets, call [[mk()]]', 'each target made', 'then'],
+    ]),
+    skeletons.chain('mk.c: the loop to MADE', [
+      ['mk.c:def:mk', 'the graph built, the flags cleared', ''],
+      ['mk.c:comment:"function [[work]]"', 'down the graph: something to do?', 'loops'],
+      ['mk.c:comment:"function [[outofdate]]"', 'older than a prerequisite?', 'asks'],
+      ['recipe.c:def:dorecipe', 'its recipe started', 'if so'],
+      ['mk.c:comment:"function [[update]]"', 'MADE, its new time read', 'job done'],
+    ]),
+    skeletons.chain('parse.c: a mkfile read', [
+      ['parse.c:def:parse', 'the loop over lines', ''],
+      ['lex.c:def:assline', 'a logical line', 'reads'],
+      ['varsub.c:comment:"function [[stow]]"', 'words, variables expanded', 'splits'],
+      ['parse.c:comment:"function [[rhead]]"', 'assignment or rule header', 'classifies'],
+      ['parse.c:comment:"function [[rbody]]"', 'the recipe lines', 'a rule'],
+      ['parse.c:def:addrules', 'rules filed', 'adds'],
+    ]),
+    skeletons.chain('graph.c: rules to a graph', [
+      ['graph.c:def:graph', 'the root node', ''],
+      ['graph.c:def:applyrules', 'rules and meta-rules for a node', 'expands'],
+      ['match.c:def:match', 'a meta-rule matched: the stem', 'patterns'],
+      ['graph.c:comment:"function [[vacuous]]"', 'dead ends pruned', 'then'],
+      ['graph.c:comment:"function [[cyclechk]]"', 'no cycles', 'checks'],
+    ]),
+    skeletons.chain('run.c: jobs in parallel', [
+      ['run.c:def:run', 'a job queued', ''],
+      ['run.c:comment:"function [[sched]]"', 'started on a free slot', 'schedules'],
+      ['Plan9.c:def:execsh', 'rc runs the recipe', 'forks'],
+      ['run.c:def:waitup', 'a child waited for', 'later'],
+      ['mk.c:comment:"function [[update]]"', 'its nodes made', 'updates'],
+    ]),
+    skeletons.chain('varsub.c: variables in a line', [
+      ['varsub.c:comment:"function [[nextword]]"', 'the next word of a line', ''],
+      ['varsub.c:comment:"function [[varsub]]"', 'a $ found', 'expands'],
+      ['varsub.c:comment:"function [[expandvar]]"', '${...}: plain or substituted', 'braces'],
+      ['varsub.c:comment:"function [[subsub]]"', 'the pattern substitution', 'a :'],
+    ]),
+    skeletons.chain('Plan9.c: mk and the system', [
+      ['Plan9.c:def:readenv', '/env read as variables', ''],
+      ['Plan9.c:def:exportenv', 'variables written back', 'before a recipe'],
+      ['Plan9.c:def:execsh', 'rc -e, the recipe on stdin', 'runs'],
+      ['Plan9.c:def:mkmtime', "a file's time", 'after'],
+    ]),
+    skeletons.chain('Posix.c: the same on Unix', [
+      ['Posix.c:def:shell', 'the shell chosen', ''],
+      ['Posix.c:def:execsh', 'fork and exec', 'runs'],
+      ['Posix.c:def:Exit', 'children killed, exit', 'ends'],
+    ]),
+    skeletons.chain('env.c: a job\'s variables', [
+      ['env.c:def:initenv', 'the special names', ''],
+      ['env.c:def:buildenv', "a job's $target, $prereq, $stem", 'per job'],
+      ['Plan9.c:def:exportenv', 'to /env', 'exported'],
+    ]),
+    skeletons.chain('rc.c: rc\'s quoting', [
+      ['rc.c:def:charin', 'a character outside quotes', ''],
+      ['rc.c:def:expandquote', 'a quote inside a word', 'quotes'],
+      ['rc.c:def:copyq', 'a quoted string copied', 'copies'],
+    ]),
+    skeletons.chain('lex.c: a logical line', [
+      ['lex.c:def:assline', 'lines joined, comments dropped', ''],
+      ['lex.c:def:nextrune', 'a rune, backslash-newline elided', 'reads'],
+      ['lex.c:comment:"function [[bquote]]"', '`cmd` replaced by its output', 'a backquote'],
+      ['Plan9.c:def:pipecmd', 'rc runs cmd', 'runs'],
+    ]),
+    skeletons.chain('rule.c: rules filed', [
+      ['rule.c:def:addrule', 'a rule made', ''],
+      ['rule.c:def:lr', 'simple: the list of rules', 'plain'],
+      ['rule.c:def:lmr', 'meta: the list of meta-rules', 'with %'],
+    ]),
+    skeletons.chain('recipe.c: a recipe run', [
+      ['recipe.c:def:dorecipe', 'the master rule found', ''],
+      ['recipe.c:def:newjob', 'a job built', 'makes'],
+      ['run.c:def:run', 'queued', 'runs'],
+    ]),
+    skeletons.chain('archive.c: archive members', [
+      ['archive.c:def:atimeof', "lib.a(member)'s time", ''],
+      ['archive.c:comment:"function [[atimes]]"', 'the archive read, times cached', 'reads'],
+      ['archive.c:def:atouch', 'a member touched', '-t'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'How mk builds a target',
+      stops: [
+        { at: 'main.c:def:main', say: 'The command line, the mkfile parsed, each target made.' },
+        { at: 'parse.c:def:parse', say: 'Lines become assignments or rules; recipes are the tab-indented lines.' },
+        { at: 'mk.h:comment:"struct [[Node]]"', say: 'The graph: nodes for files, arcs labelled by rules.' },
+        { at: 'graph.c:def:applyrules', say: 'Built once, from the target down; meta-rules give stems.' },
+        { at: 'mk.c:def:mk', say: 'work until the root is MADE, waiting when nothing can start.' },
+        { at: 'mk.c:comment:"function [[work]]"', say: 'Depth first: a node is started when its prerequisites are made.' },
+        { at: 'recipe.c:def:dorecipe', say: 'The recipe of the out-of-date node becomes a job.' },
+        { at: 'run.c:comment:"function [[sched]]"', say: 'Up to $NPROC recipes run by rc at once.' },
+        { at: 'Plan9.c:def:execsh', say: 'rc -e reads the recipe; the variables reach it through /env.' },
+      ],
+    },
+  ],
+}

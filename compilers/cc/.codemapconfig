@@ -1,0 +1,290 @@
+// compilers/cc/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12). The
+// book: ../Compiler.nw ("Software architecture", "Core Data Structures").
+// cc.y, the C grammar, is yacc: not a source the map reads, but where the
+// parser's actions are -- each rule building Nodes (new), declaring
+// (dodecl, xdecl, adecl), and, at a function's closing brace, calling
+// codgen. c99.txt: notes on C99 features supported.
+local skeletons = import '../../skeletons.libsonnet';
+// a module's skeleton: its steps, [anchor in f, role, say] each
+local M(f, name, steps) = skeletons.chain(name, [[f + ':' + s[0], s[1], s[2]] for s in steps]);
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The C front end shared by 5c and 8c (cc.a): lexer, preprocessor, parser's helpers, type checker. The grammar's actions are in cc.y (yacc).",
+  files: {
+    'cc.h': {
+      digest: 'f3c48203f6bc',
+      summary: 'The front end\'s world: the AST (Node), types (Type), the symbol table (Sym), declarations, and every enum of kinds.',
+      capitals: [
+        { at: 'type:Node', say: 'the AST: one binary tree for all' },
+        { at: 'type:Type', say: 'a C type, a chain of Types' },
+        { at: 'type:Sym', say: 'a name: its type, class, offset' },
+      ],
+      important: [
+        { at: 'type:Node_kind', say: 'OADD, ONAME, OLIST...: what a Node is', weight: 3 },
+        { at: 'type:Type_kind', say: 'TCHAR..TSTRUCT: etype', weight: 2 },
+        { at: 'type:Storage_class', say: 'CAUTO, CEXTERN, CSTATIC...', weight: 2 },
+        { at: 'type:Decl', say: 'the scope stack: a Sym as it was', weight: 2 },
+        { at: 'type:Io', say: 'an input file on the include stack', weight: 1 },
+        { at: 'type:Bits', say: 'bit sets, for the register allocator', weight: 1 },
+      ],
+    },
+    'lex.c': {
+      digest: 'e19f201833b4',
+      summary: 'The driver and the lexer: main (flags, a process per file), compile (cpp or not, then yyparse), yylex and the symbol table.',
+      capitals: [
+        { at: 'def:main', say: '5c and 8c start here' },
+        { at: 'def:compile', say: 'one .c: yyparse, then gclean' },
+        { at: 'def:yylex', say: 'the tokens yacc asks for' },
+      ],
+      important: [
+        { at: 'comment:"known debug flags"', say: 'the flags, documented', weight: 2 },
+        { at: 'code:"i = fork()"', say: 'several .c files: a process each', weight: 1 },
+        { at: 'code:"av[0] = CPP"', say: '-p: the real cpp, piped in', weight: 2 },
+        { at: 'code:"yyparse();"', say: 'the whole file parsed; code emitted per function', weight: 3 },
+        { at: 'def:lookup', say: 'the symbol table: a hash of Syms', weight: 3 },
+        { at: 'def:GETC', say: 'the input buffer; # lines go to macros', weight: 1 },
+        { at: 'def:cinit', say: 'keywords and types entered', weight: 1 },
+      ],
+      related: ['cc.y', '../Compiler.nw'],
+    },
+    'mac.c': {
+      digest: '396dc796e573',
+      summary: "The built-in preprocessor (the book's macxxx): #define, #include, #if, #pragma, and macros expanded as the lexer reads.",
+      capitals: [{ at: 'def:domacro', say: 'a # line: its directive run' }],
+      important: [
+        { at: 'def:macexpand', say: 'a macro call rewritten into the input', weight: 3 },
+        { at: 'def:macdef', say: '#define: the body kept, #params as \\1', weight: 2 },
+        { at: 'def:macinc', say: '#include: a new Io pushed', weight: 2 },
+        { at: 'def:macif', say: '#ifdef: skipped text scanned', weight: 1 },
+        { at: 'def:macprag', say: '#pragma: varargck, pack, lib...', weight: 1 },
+        { at: 'def:linehist', say: 'file and line history, for the debugger', weight: 1 },
+      ],
+    },
+    'dcl.c': {
+      digest: '2e846c23686a',
+      summary: "Declarations, called from cc.y's actions: symbols declared and scoped, types merged, initializers, struct layout, type signatures.",
+      capitals: [{ at: 'def:dodecl', say: 'a declarator: the cc.y actions call it' }],
+      important: [
+        { at: 'def:xdecl', say: 'an external: global or function', weight: 3 },
+        { at: 'def:adecl', say: 'an automatic: its stack offset', weight: 2 },
+        { at: 'def:pdecl', say: 'a parameter', weight: 1 },
+        { at: 'def:push', say: 'scopes: the Decl stack', weight: 2 },
+        { at: 'def:doinit', say: 'an initializer, walked with the type', weight: 2 },
+        { at: 'def:tmerge', say: 'old and new declarations reconciled', weight: 1 },
+        { at: 'def:signature', say: "a type's hash: the linker checks it", weight: 2 },
+        { at: 'def:sametype', say: 'type equality', weight: 1 },
+      ],
+      related: ['cc.y'],
+    },
+    'com.c': {
+      digest: 'd1e6a1924093',
+      summary: 'The type checker: complex types each expression tree (tcom), inserts the conversions, then folds and simplifies it (ccom).',
+      capitals: [{ at: 'def:complex', say: 'an expression checked and simplified' }],
+      important: [
+        { at: 'def:tcom', say: 'types each node, bottom up', weight: 3 },
+        { at: 'def:tcomo', say: 'the operators: conversions added', weight: 2 },
+        { at: 'def:tlvalue', say: 'an lvalue required', weight: 1 },
+        { at: 'def:ccom', say: 'rewrites: constants, shifts, compares', weight: 2 },
+        { at: 'def:compar', say: 'a comparison always true or false', weight: 1 },
+      ],
+      links: [{ from: 'def:complex', to: 'def:tcom' }, { from: 'def:complex', to: 'def:ccom' }],
+    },
+    'com64.c': {
+      digest: '8cb22106389e',
+      summary: '64-bit arithmetic on 32-bit machines: vlong operations rewritten into calls to _addv, _mulv... in libc.',
+      capitals: [],
+      important: [
+        { at: 'def:com64init', say: 'the runtime functions named', weight: 2 },
+        { at: 'def:com64', say: 'an operator on vlongs becomes a call', weight: 3 },
+        { at: 'def:convvtox', say: 'constants converted by type', weight: 1 },
+      ],
+    },
+    'scon.c': {
+      digest: 'f17019d7a1ae',
+      summary: 'Constant folding (evconst) and reassociation of commutative operators so constants meet (acom).',
+      important: [
+        { at: 'def:evconst', say: 'a node with constant operands evaluated', weight: 3 },
+        { at: 'def:acom', say: 'a+1+b+2 reordered to a+b+3', weight: 2 },
+        { at: 'def:addo', say: 'which operators are associative', weight: 1 },
+      ],
+    },
+    'sub.c': {
+      digest: 'a31c5a6de4b6',
+      summary: 'The front end\'s toolbox: nodes and types made, type compatibility tables, arithmetic conversions, diagnostics.',
+      capitals: [{ at: 'def:new', say: 'a Node made: every tree starts here' }],
+      important: [
+        { at: 'def:typ', say: 'a Type made', weight: 2 },
+        { at: 'def:tcompat', say: 'which operand types an operator accepts', weight: 3 },
+        { at: 'def:arith', say: 'the usual arithmetic conversions', weight: 2 },
+        { at: 'def:prtree', say: 'the AST dumped: which fields matter', weight: 2 },
+        { at: 'def:diag', say: 'an error, with the line', weight: 1 },
+        { at: 'def:tinit', say: 'the basic types built', weight: 1 },
+      ],
+    },
+    'dpchk.c': {
+      digest: '079e8967ffe9',
+      summary: 'print format checking: #pragma varargck declares formats, and each call\'s arguments are checked against them.',
+      important: [
+        { at: 'def:dpcheck', say: 'a call to a print-like function checked', weight: 3 },
+        { at: 'def:checkargs', say: 'each % verb against its argument', weight: 2 },
+        { at: 'def:pragvararg', say: '#pragma varargck', weight: 1 },
+      ],
+    },
+    'funct.c': {
+      digest: '66e3e9812a34',
+      summary: 'Operators on structs (an old Plan 9 C extension): a struct with a typestr gets its + and == as function calls.',
+      important: [
+        { at: 'def:isfunct', say: 'an operator on such a struct: a call', weight: 2 },
+        { at: 'def:dclfunct', say: 'the functions declared', weight: 1 },
+      ],
+    },
+    'acid.c': {
+      digest: 'd59d2889fccf',
+      summary: '-a: the types written as acid declarations, for the acid debugger to print structures.',
+      important: [
+        { at: 'def:acidtype', say: 'a struct as acid code', weight: 2 },
+        { at: 'def:acidvar', say: 'a global for acid', weight: 1 },
+      ],
+    },
+    'pickle.c': {
+      digest: 'f208c9ade177',
+      summary: '-P: the types written as pickling functions (marshal and unmarshal), a sibling of acid.c.',
+      important: [{ at: 'def:pickletype', say: 'a struct as pickle code', weight: 2 }],
+    },
+    'globals.c': {
+      digest: 'a43beda97a7c',
+      summary: "The front end's global variables: the current position, scopes, flags, the output, the types table.",
+      important: [
+        { at: 'def:hash', say: 'the symbol table', weight: 2 },
+        { at: 'def:dclstack', say: 'the scope stack', weight: 2 },
+        { at: 'def:types', say: 'the basic types, by kind', weight: 1 },
+        { at: 'def:debug', say: 'the -flags', weight: 1 },
+      ],
+    },
+    'bits.c': {
+      digest: '7a6aff99c586',
+      summary: 'Bit set operations (Bits), used by the back ends\' register allocators.',
+    },
+    'utils.c': {
+      digest: '1c47d0fdb627',
+      summary: 'Memory in hunks (alloc), yyerror and errorexit.',
+      important: [{ at: 'def:alloc', say: 'never freed: allocated in big hunks', weight: 1 }],
+    },
+    'compat.c': {
+      digest: 'fef6c4764e75',
+      summary: 'Wrappers for the system (access, create, wait) and a malloc over alloc, copied from the assemblers.',
+    },
+    'omachcap.c': {
+      digest: '17d0deda7052',
+      summary: 'The default machcap: no machine capability, as the old cc.',
+    },
+  },
+  skeletons: [
+    skeletons.parts('The front end: from the text to a checked tree', [
+      ['lex.c', 'main, compile, the lexer: the tokens'],
+      ['mac.c', 'the # lines, macros expanded in the input'],
+      ['dcl.c', "declarations: cc.y's actions call it"],
+      ['com.c', 'each expression typed and simplified'],
+      ['cc.h', 'Node, Type, Sym: what they share'],
+      ['../cc2/pgen.c', 'codgen: the back end, per function'],
+    ], [
+      ['lex.c', 'mac.c', 'a # line'],
+      ['lex.c', 'dcl.c', 'tokens, reduced by cc.y'],
+      ['dcl.c', 'com.c', 'initializers, sizes'],
+      ['lex.c', '../cc2/pgen.c', "a function's body, by cc.y"],
+    ]),
+    skeletons.cmd('5c and 8c: main to a function compiled', 'lex.c:def:main', [
+      ['lex.c:def:compile', 'one .c file, maybe through cpp', 'each file'],
+      ['lex.c:code:"yyparse();"', 'the yacc parser (cc.y), its actions build the tree', 'parse'],
+      ['lex.c:def:yylex', 'the next token', 'tokens'],
+      ['dcl.c:def:xdecl', 'a function or global declared', 'reduced'],
+      ['../cc2/pgen.c:def:codgen', 'a function body compiled', 'the body, from cc.y'],
+    ]),
+    M('lex.c', 'The lexer: characters to tokens', [
+      ['def:main', 'the flags, a compile per file', ''],
+      ['def:compile', 'include path, cpp, yyparse, gclean', 'each file'],
+      ['def:yylex', 'a token: names, numbers, strings', 'from yyparse'],
+      ['def:GETC', 'the next character, from the Io stack', 'characters'],
+      ['def:lookup', 'a name to its Sym', 'a name'],
+    ]),
+    M('mac.c', 'The preprocessor inside the lexer', [
+      ['def:domacro', 'a # line dispatched', ''],
+      ['def:macdef', '#define', 'define'],
+      ['def:macinc', '#include: an Io pushed', 'include'],
+      ['def:macif', '#if, #ifdef: text skipped', 'conditional'],
+      ['def:macexpand', 'a use expanded into the input', 'from yylex'],
+    ]),
+    M('dcl.c', 'Declarations: a declarator to a Sym', [
+      ['def:dodecl', 'a declarator walked to its type', ''],
+      ['def:xdecl', 'external', 'global'],
+      ['def:adecl', 'automatic: a stack offset', 'local'],
+      ['def:push', 'scopes kept as a Decl stack', 'scoped'],
+      ['def:doinit', 'its initializer', 'initialized'],
+    ]),
+    M('com.c', 'Type checking an expression', [
+      ['def:complex', 'the entry, per expression', ''],
+      ['def:tcom', 'types each node', 'typed'],
+      ['def:tcomo', 'operators and their conversions', 'an operator'],
+      ['def:ccom', 'constant and shape rewrites', 'then simplified'],
+    ]),
+    M('com64.c', 'vlong operations as calls', [
+      ['def:com64init', 'the helper functions named', ''],
+      ['def:com64', 'a 64-bit node rewritten', 'used by'],
+      ['def:bool64', 'a vlong in a condition', 'conditions'],
+    ]),
+    M('scon.c', 'Constants folded, operators reassociated', [
+      ['def:evconst', 'a constant subtree computed', ''],
+      ['def:acom', 'a commutative chain', 'otherwise'],
+      ['def:acom1', 'its terms collected', 'terms'],
+      ['def:addo', 'which operators qualify', 'asks'],
+    ]),
+    M('sub.c', 'Trees and types made and compared', [
+      ['def:new', 'a Node', ''],
+      ['def:typ', 'a Type', 'typed'],
+      ['def:tcompat', 'operand types allowed', 'checked'],
+      ['def:arith', 'conversions inserted', 'converted'],
+      ['def:diag', 'errors reported', 'errors'],
+    ]),
+    M('dpchk.c', 'Format strings checked', [
+      ['def:pragvararg', '#pragma varargck read', ''],
+      ['def:dpcheck', 'a call to a declared function', 'a call'],
+      ['def:checkargs', 'each verb against its argument', 'its arguments'],
+    ]),
+    M('funct.c', 'Struct operators as functions', [
+      ['def:dclfunct', 'a struct with operators declared', ''],
+      ['def:isfunct', 'an operator on it becomes a call', 'uses'],
+      ['type:Ftab', 'the operators and their names', 'looks up'],
+    ]),
+    M('acid.c', 'Types as acid code', [
+      ['def:acidtype', 'a struct type', ''],
+      ['def:acidmember', 'its members', 'each member'],
+      ['def:acidvar', 'a variable', 'globals'],
+    ]),
+    M('pickle.c', 'Types as pickling code', [
+      ['def:pickletype', 'a struct type', ''],
+      ['def:picklemember', 'each member', 'members'],
+      ['def:pmap', 'a basic type to its pickler', 'basic'],
+    ]),
+    M('globals.c', 'The global state', [
+      ['def:hash', 'symbols', ''],
+      ['def:dclstack', 'scopes', 'declared into'],
+      ['def:iostack', 'input files', 'read from'],
+      ['def:lineno', 'where we are', 'positions'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'A C file through the front end',
+      stops: [
+        { at: 'lex.c:def:main', say: 'The flags; ginit is the back end\'s (5c or 8c) initialization.' },
+        { at: 'lex.c:def:compile', say: 'One file: the include path, maybe cpp, then yyparse: no separate passes.' },
+        { at: 'lex.c:def:yylex', say: 'The tokens yacc asks for; a name looked up in the symbol table as it is read.' },
+        { at: 'mac.c:def:domacro', say: 'A # line handled inside the lexer: the preprocessor is not a separate program.' },
+        { at: 'dcl.c:def:dodecl', say: "cc.y's actions call the declarations: a declarator turned into a typed Sym." },
+        { at: 'com.c:def:complex', say: 'Each expression typed and simplified before the back end sees it.' },
+        { at: '../cc2/pgen.c:def:codgen', say: 'At the closing brace, cc.y calls codgen: the function compiled at once.' },
+      ],
+    },
+  ],
+}

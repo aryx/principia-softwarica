@@ -1,0 +1,65 @@
+// profilers/iostats/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "iostats: a proxy 9P file server mounted under a command, counting each message's calls, bytes and time.",
+  files: {
+    'iostats.c': {
+      summary: 'The proxy set up: a pipe mounted as /, the command run under it, 9P messages dispatched, the report.',
+      digest: 'a91ad6d7e07c',
+      capitals: [{ at: 'def:main', say: 'mount the pipe, fork the command, serve 9P' }],
+      important: [
+        { at: 'def:fcalls', say: 'a handler per 9P message type, by number', weight: 3 },
+        { at: 'code:"MREPL"', say: "the child's / is now us: the one trick", weight: 3 },
+        { at: 'code:"(fcalls[type])"', say: 'each message counted, then handled', weight: 2 },
+        { at: 'def:runprog', say: 'the command exec-ed, $path searched', weight: 1 },
+        { at: 'def:fidreport', say: "per file: bytes read and written, at clunk", weight: 1 },
+        { at: 'def:reply', say: 'the answer back to the client, timed', weight: 1 },
+      ],
+      links: [{ from: 'def:main', to: 'def:runprog' }, { from: 'def:main', to: 'def:fidreport' }],
+    },
+    'statsrv.c': {
+      summary: "The 9P handlers: each T-message forwarded to the real file, its latency and bytes added to the stats.",
+      digest: '1f8778d3bb6f',
+      capitals: [{ at: 'def:slave', say: 'reads and writes handed to a slave process' }],
+      important: [
+        { at: 'def:update', say: 'one message counted: calls, bytes, time', weight: 3 },
+        { at: 'def:Xwalk', say: 'a walk done by the real namespace', weight: 1 },
+        { at: 'def:blockingslave', say: 'a process per blocking call: flush can interrupt it', weight: 2 },
+        { at: 'def:slaveread', say: 'the real read, then its bytes recorded', weight: 1 },
+        { at: 'def:flushaction', say: 'Tflush: the slave interrupted', weight: 1 },
+      ],
+    },
+    'statfs.h': {
+      summary: "The proxy's structures: Fsrpc (a message in flight), Fid, File, the Stats table per message and per file.",
+      digest: '302110bbe7a9',
+      capitals: [{ at: 'type:Fsrpc', say: 'a 9P request being served' }],
+      important: [
+        { at: 'type:Fid', say: "the client's fid, the real fd behind it", weight: 2 },
+        { at: 'type:Rpc', say: 'per message type: count, bytes, time', weight: 2 },
+        { at: 'type:Frec', say: 'per file: what was read and written', weight: 1 },
+      ],
+    },
+    'globals.c': {
+      summary: "The proxy's globals: the fid hash, the work queue, the stats, the per-file records.",
+      digest: '6d6146755086',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('iostats: a proxy in the namespace', 'iostats.c:def:main', [
+      ['iostats.c:def:runprog', 'the command, its / mounted on our pipe', 'fork'],
+      ['iostats.c:def:fcalls', 'each 9P message read from the pipe, dispatched', 'its 9P'],
+      ['statsrv.c:def:slave', 'reads and writes done by a slave process', 'Tread, Twrite'],
+      ['statsrv.c:def:update', 'the message counted and timed', 'done'],
+      ['iostats.c:def:fidreport', 'at the end: the report', 'the stats'],
+    ]),
+    skeletons.chain('A 9P message proxied (statsrv.c)', [
+      ['statsrv.c:def:Xwalk', 'a quick message: done here, on the real files', ''],
+      ['statsrv.c:def:slave', 'a read or write: given to a slave process', 'or'],
+      ['statsrv.c:def:blockingslave', 'the slave: waits for work, may be flushed', 'work queued'],
+      ['statsrv.c:def:slaveread', 'the real read, timed', 'Tread'],
+      ['statsrv.c:def:update', 'the message counted: calls, bytes, time', 'recorded'],
+    ]),
+  ],
+}

@@ -1,0 +1,99 @@
+// kernel/buses/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The buses the devices hang on: serial lines (#t), USB (#u, its hubs and devices in user space), PCI and DMA.',
+  dirs: {
+    user: { summary: "USB's user half: usbd enumerates the bus, a driver program per class serves its files." },
+  },
+  files: {
+    'devuart.c': {
+      digest: '616deb436b11',
+      summary: 'The serial lines as files (#t: eia0, eia0ctl...): the portable half over each chip\'s PhysUart; the early console.',
+      capitals: [
+        { at: 'def:uartdevtab', say: "#t: the serial lines' device" },
+        { at: 'def:uartputs', say: 'the kernel prints before any screen' },
+      ],
+      important: [
+        { at: 'def:uartreset', say: "each chip's pnp: the ports found, 3 files each", weight: 3 },
+        { at: 'def:uartenable', say: 'queues made, the chip enabled through phys', weight: 1 },
+        { at: 'def:uartctl', say: "'b9600', 'l8', 'pn'...: a line's settings as text", weight: 2 },
+        { at: 'def:uartkick', say: 'output restarted: the chip handed bytes', weight: 1 },
+        { at: 'def:uartrecv', say: 'the interrupt: xon/xoff, then a staging buffer', weight: 3 },
+        { at: 'comment:"we save up input characters till clock time"', say: 'input handed on at the tick: fewer wakeups', weight: 2 },
+        { at: 'def:consuart', say: 'the uart used as console, polled', weight: 1 },
+      ],
+      links: [
+        { from: 'def:uartdevtab', to: 'def:uartreset' },
+        { from: 'def:uartrecv', to: 'def:uartstageinput' },
+      ],
+      related: ['portdat_buses.h', 'arm/uartmini.c', '386/uarti8250.c'],
+    },
+    'portdat_buses.h': {
+      digest: '00515b7c9e44',
+      summary: 'The serial line types: Uart (a port, its queues and staging buffers), PhysUart (a chip, as function pointers).',
+      capitals: [
+        { at: 'type:PhysUart', say: 'a UART chip: its operations' },
+        { at: 'type:Uart', say: 'a serial port and its buffers' },
+      ],
+      important: [
+        { at: 'def:physuart', say: 'the chips linked in, a nil-ended table', weight: 2 },
+        { at: 'type:ISAConf', say: "an ISA card's configuration (plan9.ini)", weight: 1 },
+      ],
+    },
+    'portfns_buses.h': {
+      digest: '67779ea2d645',
+      summary: "What the chips' drivers and the console call of devuart.c: uartrecv, uartkick, uartputs...",
+    },
+    'usb.h': {
+      digest: 'f54719c66763',
+      summary: "The kernel's USB types: Hci (a host controller, as function pointers), Ep (an endpoint), Udev (a device).",
+      capitals: [
+        { at: 'type:Hci', say: 'a host controller: its operations' },
+      ],
+      important: [
+        { at: 'type:Ep', say: 'an endpoint: its type, mode, packet size', weight: 2 },
+        { at: 'type:Hciimpl', say: "the controller's functions, set by its reset", weight: 2 },
+        { at: 'type:Udev', say: 'a device: its address, speed, state', weight: 1 },
+        { at: 'def:addhcitype', say: 'a controller driver registers itself', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts("The buses: a portable device over each architecture's chips", [
+      ['devuart.c', "#t: the serial lines' files, portable"],
+      ['portdat_buses.h', 'Uart and PhysUart: the interface to a chip'],
+      ['usb.h', "Hci and Ep: the interface to a USB controller"],
+      ['arm/', "the Pi's chips: mini UART, the DWC USB controller, DMA"],
+      ['386/', "the PC's: the 8250 UART, PCI, the 8237 DMA"],
+      ['user/', 'USB in user space: usbd and the class drivers'],
+      ['../console/devcons.c', 'the console: printed on the serial line too'],
+    ], [
+      ['arm/', 'portdat_buses.h', 'a PhysUart, a Hci'],
+      ['386/', 'portdat_buses.h', 'a PhysUart'],
+      ['portdat_buses.h', 'devuart.c', 'physuart[]: the chips'],
+      ['usb.h', 'arm/', 'implemented by usbdwc.c'],
+      ['user/', 'arm/', "#u's files: endpoints read and written"],
+      ['../console/devcons.c', 'devuart.c', 'uartputs'],
+    ]),
+    {
+      name: 'A serial line: devuart over a chip',
+      bones: [
+        { at: 'devuart.c:def:uartdevtab', role: '#t, reached through devtab' },
+        { at: 'devuart.c:def:uartreset', role: 'the ports found by each chip' },
+        { at: 'portdat_buses.h:type:PhysUart', role: "the chip's operations" },
+        { at: 'devuart.c:def:uartkick', role: 'output: bytes to the chip' },
+        { at: 'devuart.c:def:uartrecv', role: 'input: a byte at interrupt time' },
+        { at: 'devuart.c:comment:"we save up input characters till clock time"', role: 'the tick: staged input to the queue' },
+      ],
+      joints: [
+        { from: 'devuart.c:def:uartdevtab', to: 'devuart.c:def:uartreset', say: 'at boot (a devtab pointer)' },
+        { from: 'devuart.c:def:uartreset', to: 'portdat_buses.h:type:PhysUart', say: 'pnp(): the ports' },
+        { from: 'devuart.c:def:uartkick', to: 'portdat_buses.h:type:PhysUart', say: 'phys->kick' },
+        { from: 'portdat_buses.h:type:PhysUart', to: 'devuart.c:def:uartrecv', say: "the chip's interrupt: a byte" },
+        { from: 'devuart.c:def:uartrecv', to: 'devuart.c:comment:"we save up input characters till clock time"', say: 'the staging buffer' },
+      ],
+    },
+  ],
+}

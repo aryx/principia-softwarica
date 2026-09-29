@@ -1,0 +1,107 @@
+// networking/snoopy/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). The filter grammar is filter.y (yacc, not a C source: yyparse).
+// Every protocol module has the same shape: a Proto record of compile,
+// filter and seprint, and a Mux naming the protocols above it; the calls
+// through the record are invisible to "called by".
+local skeletons = import '../../skeletons.libsonnet';
+// a protocol module: its Proto record and the functions it points to
+local proto(file, name, what, fns, next='') = {
+  name: 'A protocol module: ' + file,
+  bones: [{ at: file + ':def:' + name, role: 'the Proto: ' + what }]
+         + [{ at: file + ':def:' + f[0], role: f[1] } for f in fns],
+  joints: [{ from: file + ':def:' + name, to: file + ':def:' + f[0], say: 'through the record' } for f in fns],
+};
+local std3 = [['p_compile', 'a filter expression checked'], ['p_filter', 'a packet tested'], ['p_seprint', 'a packet printed']];
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "snoopy, the packet sniffer: packets read from an interface, filtered by an expression, printed layer by layer.",
+  files: {
+    'main.c': {
+      summary: 'snoopy: the filter parsed and compiled over the graph of protocols, then packets read, filtered, printed.',
+      digest: '5a22d90f1098',
+      capitals: [{ at: 'def:main', say: 'filter compiled, packets read and printed' }],
+      important: [
+        { at: 'def:mkprotograph', say: 'which protocol can sit on which: the muxes', weight: 2 },
+        { at: 'code:"yyparse()"', say: 'the filter expression (filter.y)', weight: 1 },
+        { at: 'def:compile', say: 'a path of protocols filled in, e.g. ether.ip.tcp', weight: 3 },
+        { at: 'def:filterpkt', say: 'a packet tested against the filter tree', weight: 2 },
+        { at: 'def:printpkt', say: 'each layer printed, then the next demuxed', weight: 2 },
+        { at: 'def:demux', say: 'the protocol above, from a header field', weight: 2 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:compile' },
+        { from: 'def:main', to: 'def:filterpkt' },
+        { from: 'def:main', to: 'def:printpkt' },
+      ],
+    },
+    'dat.h': {
+      summary: "snoopy's types: Proto (one per protocol module), Mux, Filter (the compiled expression), Msg (a packet being read).",
+      digest: 'ed86e8fe0066',
+      capitals: [
+        { at: 'comment:one per protocol module', say: 'Proto: compile, filter, seprint' },
+        { at: 'type:Msg', say: 'a packet, consumed layer by layer' },
+      ],
+      important: [
+        { at: 'type:Filter', say: 'the expression tree', weight: 2 },
+        { at: 'type:Mux', say: 'a header value to the protocol above', weight: 2 },
+      ],
+    },
+    'ether.c': { summary: 'Ethernet: its header, type field muxing to ip, arp, ip6...', digest: '000950b9d62f', capitals: [{ at: 'def:ether', say: 'the usual root of the graph' }] },
+    'ip.c': {
+      summary: 'IPv4: its header, protocol field muxing to tcp, udp, icmp, il.',
+      digest: '23790f17beac',
+      capitals: [{ at: 'def:ip', say: 'IPv4' }],
+    },
+    'ip6.c': { summary: 'IPv6: its header and extension headers.', digest: 'd999c0bff737' },
+    'arp.c': { summary: 'ARP and RARP: who has an address, who is a MAC.', digest: '23226620f515' },
+    'rarp.c': { summary: 'A placeholder: RARP is in arp.c.', digest: 'e995e09e55ad' },
+    'icmp.c': { summary: 'ICMP: echo, unreachable, time exceeded...', digest: '513f37ec9693' },
+    'icmp6.c': { summary: 'ICMPv6, and its neighbour discovery options.', digest: '243874b92ae4' },
+    'tcp.c': { summary: 'TCP: ports, sequence numbers, flags, options.', digest: 'b84b5df5fab2' },
+    'udp.c': { summary: 'UDP: ports, muxing to dns, bootp, ninep...', digest: '1f8dba02f686' },
+    'il.c': { summary: "IL, Plan 9's own reliable datagram protocol.", digest: '788ec0944e03' },
+    'bootp.c': { summary: 'BOOTP: addresses handed to booting machines, muxing to dhcp.', digest: '6e6423b895e0' },
+    'dhcp.c': { summary: 'DHCP options printed, one by one.', digest: '52bf6b572b23' },
+    'dns.c': { summary: 'DNS messages decoded: questions and resource records (code shared with ndb).', digest: '57fb4af24186' },
+    'ninep.c': { summary: '9P messages printed, by libc\'s Fcall format.', digest: '188ea0001251' },
+    'ttls.c': { summary: 'TTLS (EAP over TLS) records.', digest: '66516dc8fd56' },
+    'dump.c': { summary: 'dump: the bytes left, in hex; the protocol of last resort.', digest: '11b8f16590e4' },
+  },
+  skeletons: [
+    skeletons.cmd('snoopy: packets filtered and printed', 'main.c:def:main', [
+      ['main.c:def:mkprotograph', 'the protocols linked by their muxes', ''],
+      ['main.c:def:compile', 'the filter expression compiled', 'yyparse (filter.y)'],
+      ['main.c:def:filterpkt', 'a packet tested', 'read from /net/ether0'],
+      ['main.c:def:printpkt', 'printed layer by layer', 'a match'],
+      ['main.c:def:demux', 'the next layer found', 'a header field'],
+    ]),
+    skeletons.parts('snoopy: a driver and a module per protocol', [
+      ['main.c', 'the driver: filters, packets'],
+      ['dat.h', 'Proto, Mux, Filter, Msg'],
+      ['ether.c', 'link layer'],
+      ['ip.c', 'network layer (ip6.c, arp.c, icmp.c)'],
+      ['tcp.c', 'transport layer (udp.c, il.c)'],
+      ['dns.c', 'applications (bootp, dhcp, ninep, ttls)'],
+      ['dump.c', 'what is left, in hex'],
+    ], [
+      ['main.c', 'ether.c', 'the root'],
+      ['ether.c', 'ip.c', 'type 0x800'],
+      ['ip.c', 'tcp.c', 'protocol 6'],
+      ['tcp.c', 'dns.c', 'port 53 (via udp)'],
+      ['dns.c', 'dump.c', 'unknown: hex'],
+    ]),
+    proto('ether.c', 'ether', 'ethernet frames', std3),
+    proto('ip.c', 'ip', 'IPv4', std3),
+    proto('ip6.c', 'ip6', 'IPv6', std3),
+    proto('arp.c', 'arp', 'ARP', std3),
+    proto('icmp.c', 'icmp', 'ICMP', std3),
+    proto('icmp6.c', 'icmp6', 'ICMPv6', std3),
+    proto('tcp.c', 'tcp', 'TCP', std3),
+    proto('udp.c', 'udp', 'UDP', std3),
+    proto('il.c', 'il', 'IL', std3),
+    proto('bootp.c', 'bootp', 'BOOTP', std3),
+    proto('dhcp.c', 'dhcp', 'DHCP options', [['p_seprint', 'the options printed'], ['pserver', 'an address list']]),
+    proto('dns.c', 'dns', 'DNS', [['p_seprint', 'the message printed'], ['p_seprintan', 'the answers'], ['fmtrr', 'a resource record']]),
+  ],
+}

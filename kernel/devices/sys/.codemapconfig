@@ -1,0 +1,286 @@
+// kernel/devices/sys/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The book: Kernel.nw's "Special Fileservers" (/env/,
+// /proc/, /fd/, /dev/), "Fileservers" (devmnt's RPC), "Pipes".
+//
+// claude: several functions here are declared before they are defined
+// (devmnt.c's forward declarations, devproc.c's): def: would land on the
+// prototype, so those are anchored by the syncweb marker above the body
+// (comment:"function [[mountio]]") or by the body's first line (code:).
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The devices that are not hardware: the 9P client (#M), /proc, /env, /srv, pipes, /fd, the root tree.',
+  files: {
+    'devmnt.c': {
+      digest: 'e7dda1797165',
+      summary: 'The mount driver (#M): every operation on a mounted file becomes a 9P message to a user file server.',
+      capitals: [
+        { at: 'comment:"function [[mountio]]"', say: 'a 9P RPC: sent, the reply awaited' },
+        { at: 'def:mntattach', say: 'mount: a server channel attached' },
+      ],
+      important: [
+        { at: 'comment:"function [[mountrpc]]"', say: 'an RPC, its reply checked', weight: 2 },
+        { at: 'code:"devtab[m->c->type]->write(m->c, r->rpc, n, 0)"', say: "the message written on the server's channel", weight: 3 },
+        { at: 'comment:"Gate readers onto the mount point one at a time"', say: 'one process reads replies for all', weight: 3 },
+        { at: 'code:"mountmux(Mnt *m, Mntrpc *r)"', say: "a reply matched to its caller's tag", weight: 3 },
+        { at: 'code:"mntgate(Mnt *m)"', say: 'the reader role handed on', weight: 2 },
+        { at: 'comment:"Create a new flush request"', say: 'interrupted: a Tflush sent', weight: 2 },
+        { at: 'def:mntwalk', say: 'Twalk: a path walked on the server', weight: 1 },
+        { at: 'code:"mntrdwr(int type, Chan *c"', say: 'Tread/Twrite, msize at a time', weight: 2 },
+        { at: 'code:"mntralloc(Chan *c, ulong msize)"', say: 'an RPC and its tag', weight: 1 },
+        { at: 'def:mntdevtab', say: 'the Dev: #M, reached only through mount', weight: 1 },
+      ],
+      links: [
+        { from: 'def:mntwalk', to: 'comment:"function [[mountrpc]]"' },
+        { from: 'comment:"function [[mountrpc]]"', to: 'comment:"function [[mountio]]"' },
+      ],
+      related: ['../../files/mnt.c', '../../files/chan.c', '../../../lib_networking/lib9p/'],
+    },
+    'devproc.c': {
+      digest: 'e157c223f8f5',
+      summary: '/proc (#p): each process a directory (ctl, mem, note, status, ns, text...), read and controlled as files.',
+      capitals: [
+        { at: 'def:procread', say: "a process's status, memory, ns, as text" },
+        { at: 'comment:"function [[procctlreq]]"', say: 'ctl: kill, stop, start, hang, pri...' },
+      ],
+      important: [
+        { at: 'def:procgen', say: 'the tree: a directory per process slot', weight: 2 },
+        { at: 'comment:"32 bits of pid, for consistency checking"', say: 'the file, the slot and the pid in one qid', weight: 1 },
+        { at: 'def:procopen', say: 'the process must still be the same pid', weight: 1 },
+        { at: 'def:procwrite', say: 'ctl, note, mem: a debugger writes here', weight: 2 },
+        { at: 'comment:"function [[procctlmemio]]"', say: "another process's memory, page by page", weight: 3 },
+        { at: 'comment:"function [[procstopwait]]"', say: 'stop: wait until the process stops', weight: 1 },
+        { at: 'comment:"function [[mntscan]]"', say: '/proc/n/ns: the namespace printed', weight: 1 },
+        { at: 'def:procdevtab', say: 'the Dev: #p', weight: 1 },
+      ],
+      related: ['../../processes/', '../../../debuggers/'],
+    },
+    'devenv.c': {
+      digest: '900c6ffb2326',
+      summary: '/env (#e): environment variables as files, in an Egrp shared by a process group (rfork RFENVG).',
+      important: [
+        { at: 'def:envlookup', say: 'a variable by name or qid', weight: 2 },
+        { at: 'def:envwrite', say: 'a variable written: its value is the file', weight: 2 },
+        { at: 'comment:"function [[envcpy]]"', say: 'rfork: the environment copied', weight: 2 },
+        { at: 'comment:"function [[ksetenv]]"', say: 'the kernel sets one (at boot)', weight: 1 },
+      ],
+    },
+    'devsrv.c': {
+      digest: 'f30d87aac60d',
+      summary: '/srv (#s): a channel posted under a name; opening the name gives that very channel, to mount.',
+      capitals: [
+        { at: 'def:srvwrite', say: 'an fd posted: its channel kept' },
+      ],
+      important: [
+        { at: 'def:srvopen', say: 'open returns the posted channel itself', weight: 3 },
+        { at: 'def:srvcreate', say: 'a name made', weight: 1 },
+        { at: 'def:srvlookup', say: 'by name or qid', weight: 1 },
+      ],
+    },
+    'devpipe.c': {
+      digest: '9b0de4f32367',
+      summary: 'Pipes (#|): data0 and data1, two queues crossed, so each end reads what the other writes.',
+      important: [
+        { at: 'def:pipeattach', say: 'a pipe: two queues', weight: 3 },
+        { at: 'def:piperead', say: 'a queue read, blocking', weight: 2 },
+        { at: 'def:pipewrite', say: "into the other end's queue", weight: 2 },
+        { at: 'def:pipeclose', say: 'one end closed: the other hangs up', weight: 1 },
+      ],
+      related: ['../../files/qio.c'],
+    },
+    'devdup.c': {
+      digest: 'cd7e7d046390',
+      summary: '/fd (#d): the open file descriptors as files; opening /fd/0 duplicates descriptor 0.',
+      important: [
+        { at: 'def:dupopen', say: "the fd's channel returned: a dup", weight: 3 },
+        { at: 'def:dupgen', say: 'n and nctl for each open fd', weight: 1 },
+      ],
+    },
+    'devroot.c': {
+      digest: '1aa529987b0f',
+      summary: "The root (#/): the tree compiled into the kernel (/, /boot, /dev, /proc... as empty mount points) and /boot's programs.",
+      capitals: [
+        { at: 'def:rootgen', say: 'the first directory a process sees' },
+      ],
+      important: [
+        { at: 'def:addrootdir', say: 'the mount points: dev, env, proc, net...', weight: 2 },
+        { at: 'comment:"function [[addbootfile]]"', say: '/boot/boot embedded in the kernel', weight: 2 },
+        { at: 'def:rootread', say: 'a /boot file read from memory', weight: 1 },
+      ],
+      related: ['../../init/user/boot/'],
+    },
+    'devsys.c': {
+      digest: 'ecc06050568f',
+      summary: '#k: the system as files: osversion, config, sysname, hostowner, drivers, reboot, sysstat.',
+      important: [
+        { at: 'def:sysdir', say: 'the files', weight: 2 },
+        { at: 'def:sysread', say: 'config, drivers, sysstat...', weight: 1 },
+        { at: 'def:syswrite', say: 'reboot, sysname, hostowner', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('Devices of the kernel itself: files over its structures', [
+      ['devmnt.c', '#M: files of user servers, by 9P'],
+      ['devproc.c', '#p: processes'],
+      ['devenv.c', '#e: environment variables'],
+      ['devsrv.c', '#s: channels posted by name'],
+      ['devpipe.c', '#|: pipes'],
+      ['devdup.c', '#d: file descriptors'],
+      ['devroot.c', '#/: the root and /boot'],
+      ['devsys.c', '#k: the system'],
+      ['../../files/', 'the channels and the namespace they all serve'],
+    ], [
+      ['../../files/', 'devmnt.c', 'mount: devtab[#M]->attach'],
+      ['devsrv.c', 'devmnt.c', 'a posted channel, mounted'],
+      ['devpipe.c', 'devmnt.c', "a pipe's end: a server's channel"],
+      ['../../files/', 'devroot.c', 'the first attach: /'],
+      ['../../files/', 'devproc.c', 'devtab: open, read, write'],
+      ['devdup.c', '../../files/', "the fd's channel"],
+    ]),
+    skeletons.chain('A read of a mounted file: devmnt to the server and back', [
+      ['../../files/sysfile.c:def:syspread', 'read(): the channel is #M', ''],
+      ['devmnt.c:def:mntread', "devtab[c->type]->read", 'devtab'],
+      ['devmnt.c:code:"mntrdwr(int type, Chan *c"', 'Tread, msize at a time', 'Tread'],
+      ['devmnt.c:comment:"function [[mountrpc]]"', 'one RPC', 'the request'],
+      ['devmnt.c:comment:"function [[mountio]]"', 'written to the server, the reply read', 'the Fcall'],
+      ['devmnt.c:code:"mountmux(Mnt *m, Mntrpc *r)"', 'the reply to its caller, by tag', 'Rread'],
+    ]),
+    {
+      name: 'devmnt.c: one channel, many callers',
+      bones: [
+        { at: 'devmnt.c:def:mntattach', role: 'Tversion, Tattach: a mount' },
+        { at: 'devmnt.c:code:"mntralloc(Chan *c, ulong msize)"', role: 'an RPC, a tag' },
+        { at: 'devmnt.c:comment:"function [[mountrpc]]"', role: 'the RPC, checked' },
+        { at: 'devmnt.c:comment:"function [[mountio]]"', role: 'sent; the reader elected' },
+        { at: 'devmnt.c:code:"mntrpcread(Mnt *m, Mntrpc *r)"', role: 'a reply read' },
+        { at: 'devmnt.c:code:"mountmux(Mnt *m, Mntrpc *r)"', role: 'matched by tag' },
+        { at: 'devmnt.c:code:"mntgate(Mnt *m)"', role: 'the next reader' },
+      ],
+      joints: [
+        { from: 'devmnt.c:def:mntattach', to: 'devmnt.c:code:"mntralloc(Chan *c, ulong msize)"', say: 'each operation' },
+        { from: 'devmnt.c:code:"mntralloc(Chan *c, ulong msize)"', to: 'devmnt.c:comment:"function [[mountrpc]]"', say: 'the request filled' },
+        { from: 'devmnt.c:comment:"function [[mountrpc]]"', to: 'devmnt.c:comment:"function [[mountio]]"', say: 'the Fcall' },
+        { from: 'devmnt.c:comment:"function [[mountio]]"', to: 'devmnt.c:code:"mntrpcread(Mnt *m, Mntrpc *r)"', say: 'while not done' },
+        { from: 'devmnt.c:code:"mntrpcread(Mnt *m, Mntrpc *r)"', to: 'devmnt.c:code:"mountmux(Mnt *m, Mntrpc *r)"', say: 'the reply' },
+        { from: 'devmnt.c:code:"mountmux(Mnt *m, Mntrpc *r)"', to: 'devmnt.c:code:"mntgate(Mnt *m)"', say: 'done: hand over' },
+      ],
+    },
+    {
+      name: 'devproc.c: processes as files',
+      bones: [
+        { at: 'devproc.c:def:procgen', role: 'the tree' },
+        { at: 'devproc.c:def:procopen', role: 'open' },
+        { at: 'devproc.c:def:procread', role: 'status, mem, ns...' },
+        { at: 'devproc.c:def:procwrite', role: 'ctl, note, mem' },
+        { at: 'devproc.c:comment:"function [[procctlreq]]"', role: 'a ctl command' },
+        { at: 'devproc.c:comment:"function [[procctlmemio]]"', role: "another's memory" },
+        { at: 'devproc.c:def:procdevtab', role: 'the Dev' },
+      ],
+      joints: [
+        { from: 'devproc.c:def:procdevtab', to: 'devproc.c:def:procgen', say: 'walk, stat' },
+        { from: 'devproc.c:def:procdevtab', to: 'devproc.c:def:procread', say: 'read' },
+        { from: 'devproc.c:def:procdevtab', to: 'devproc.c:def:procwrite', say: 'write' },
+        { from: 'devproc.c:def:procwrite', to: 'devproc.c:comment:"function [[procctlreq]]"', say: 'ctl' },
+        { from: 'devproc.c:def:procread', to: 'devproc.c:comment:"function [[procctlmemio]]"', say: 'mem' },
+      ],
+    },
+    {
+      name: 'devenv.c: variables in an Egrp',
+      bones: [
+        { at: 'devenv.c:comment:"function [[envgrp]]"', role: "the process's group" },
+        { at: 'devenv.c:def:envlookup', role: 'a variable' },
+        { at: 'devenv.c:def:envgen', role: 'the directory' },
+        { at: 'devenv.c:def:envread', role: 'its value read' },
+        { at: 'devenv.c:def:envwrite', role: 'its value written' },
+        { at: 'devenv.c:comment:"function [[envcpy]]"', role: 'rfork: copied' },
+      ],
+      joints: [
+        { from: 'devenv.c:comment:"function [[envgrp]]"', to: 'devenv.c:def:envlookup', say: 'searched' },
+        { from: 'devenv.c:comment:"function [[envgrp]]"', to: 'devenv.c:def:envgen', say: 'listed' },
+        { from: 'devenv.c:def:envlookup', to: 'devenv.c:def:envread', say: 'the Evalue' },
+        { from: 'devenv.c:def:envwrite', to: 'devenv.c:def:envlookup', say: 'finds' },
+        { from: 'devenv.c:comment:"function [[envcpy]]"', to: 'devenv.c:comment:"function [[envgrp]]"', say: 'a new group' },
+      ],
+    },
+    {
+      name: 'devsrv.c: a channel by name',
+      bones: [
+        { at: 'devsrv.c:def:srv', role: 'the posted names' },
+        { at: 'devsrv.c:def:srvcreate', role: 'a name' },
+        { at: 'devsrv.c:def:srvwrite', role: 'an fd posted' },
+        { at: 'devsrv.c:def:srvopen', role: 'the channel handed out' },
+        { at: 'devsrv.c:def:srvremove', role: 'gone' },
+      ],
+      joints: [
+        { from: 'devsrv.c:def:srvcreate', to: 'devsrv.c:def:srv', say: 'added' },
+        { from: 'devsrv.c:def:srvwrite', to: 'devsrv.c:def:srv', say: 'the fd\'s channel' },
+        { from: 'devsrv.c:def:srv', to: 'devsrv.c:def:srvopen', say: 'the same channel' },
+        { from: 'devsrv.c:def:srvremove', to: 'devsrv.c:def:srv', say: 'removed' },
+      ],
+    },
+    {
+      name: 'devpipe.c: two queues crossed',
+      bones: [
+        { at: 'devpipe.c:comment:"struct [[Pipe]]"', role: 'two queues' },
+        { at: 'devpipe.c:def:pipeattach', role: 'a pipe made' },
+        { at: 'devpipe.c:def:pipewrite', role: 'into the other end' },
+        { at: 'devpipe.c:def:piperead', role: 'from this end' },
+        { at: 'devpipe.c:def:pipeclose', role: 'hangup' },
+      ],
+      joints: [
+        { from: 'devpipe.c:def:pipeattach', to: 'devpipe.c:comment:"struct [[Pipe]]"', say: 'qopen twice' },
+        { from: 'devpipe.c:def:pipewrite', to: 'devpipe.c:comment:"struct [[Pipe]]"', say: 'qwrite' },
+        { from: 'devpipe.c:comment:"struct [[Pipe]]"', to: 'devpipe.c:def:piperead', say: 'qread' },
+        { from: 'devpipe.c:def:pipeclose', to: 'devpipe.c:comment:"struct [[Pipe]]"', say: 'qhangup' },
+      ],
+    },
+    {
+      name: 'devroot.c: the tree in the kernel',
+      bones: [
+        { at: 'devroot.c:comment:"struct [[Dirlist]]"', role: 'a directory as a list' },
+        { at: 'devroot.c:def:rootreset', role: 'at boot' },
+        { at: 'devroot.c:def:addrootdir', role: 'the mount points' },
+        { at: 'devroot.c:comment:"function [[addbootfile]]"', role: "/boot's programs" },
+        { at: 'devroot.c:def:rootgen', role: 'walk, stat' },
+        { at: 'devroot.c:def:rootread', role: 'a file read' },
+      ],
+      joints: [
+        { from: 'devroot.c:def:rootreset', to: 'devroot.c:def:addrootdir', say: 'bin, dev, env, proc...' },
+        { from: 'devroot.c:def:addrootdir', to: 'devroot.c:comment:"struct [[Dirlist]]"', say: 'rootlist' },
+        { from: 'devroot.c:comment:"function [[addbootfile]]"', to: 'devroot.c:comment:"struct [[Dirlist]]"', say: 'bootlist' },
+        { from: 'devroot.c:comment:"struct [[Dirlist]]"', to: 'devroot.c:def:rootgen', say: 'entries' },
+        { from: 'devroot.c:comment:"struct [[Dirlist]]"', to: 'devroot.c:def:rootread', say: 'the bytes' },
+      ],
+    },
+    {
+      name: 'devdup.c: /fd',
+      bones: [
+        { at: 'devdup.c:def:dupgen', role: 'n, nctl per fd' },
+        { at: 'devdup.c:def:dupopen', role: "the fd's channel" },
+        { at: 'devdup.c:def:dupread', role: 'nctl: the fd described' },
+        { at: '../../files/file.c:def:fdtochan', role: 'an fd to its channel' },
+      ],
+      joints: [
+        { from: 'devdup.c:def:dupgen', to: 'devdup.c:def:dupopen', say: 'the qid: 2*fd' },
+        { from: 'devdup.c:def:dupopen', to: '../../files/file.c:def:fdtochan', say: 'fd' },
+        { from: 'devdup.c:def:dupread', to: '../../files/file.c:def:fdtochan', say: 'fd' },
+      ],
+    },
+    {
+      name: 'devsys.c: #k',
+      bones: [
+        { at: 'devsys.c:def:sysdir', role: 'the files' },
+        { at: 'devsys.c:def:sysread', role: 'read' },
+        { at: 'devsys.c:def:syswrite', role: 'written' },
+        { at: 'devsys.c:def:rebootmsg', role: 'reboot' },
+      ],
+      joints: [
+        { from: 'devsys.c:def:sysdir', to: 'devsys.c:def:sysread', say: 'by qid' },
+        { from: 'devsys.c:def:sysdir', to: 'devsys.c:def:syswrite', say: 'by qid' },
+        { from: 'devsys.c:def:syswrite', to: 'devsys.c:def:rebootmsg', say: 'reboot' },
+      ],
+    },
+  ],
+}

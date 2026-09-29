@@ -1,0 +1,111 @@
+// utilities/text/misc/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// The book: Utilities.nw, "Search and Replace" (sed, tr) and "Pipes" (sort, uniq).
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'Line filters: the stream editor sed, sort, uniq, join, and tr on characters: the stages of a pipeline.',
+  files: {
+    'sed.c': {
+      summary: 'sed: a script compiled to an array of SedCom, then run on each line of the input, in one pass.',
+      digest: 'afe9acd95478',
+      capitals: [
+        { at: 'type:SedCom', say: 'a compiled command: addresses, regexp, rhs' },
+        { at: 'def:execute', say: 'each line through every applicable command' },
+      ],
+      important: [
+        { at: 'def:fcomp', say: 'the script compiled, a command per line', weight: 3 },
+        { at: 'def:executable', say: 'does this line match its addresses (ranges)?', weight: 2 },
+        { at: 'def:command', say: 'the command run: s, d, p, a, b...', weight: 2 },
+        { at: 'def:substitute', say: 's///: once or g, 0-length matches bumped', weight: 3 },
+        { at: 'def:dechain', say: 'branch labels resolved after compiling', weight: 1 },
+        { at: 'def:gline', say: 'the next line, across the input files', weight: 1 },
+      ],
+      links: [
+        { from: 'def:execute', to: 'def:executable' },
+        { from: 'def:execute', to: 'def:command' },
+        { from: 'def:command', to: 'def:substitute' },
+      ],
+    },
+    'sort.c': {
+      summary: 'sort: each line turned into a byte key (fields, -n, -f...) so that memcmp orders; radix sorted; merged via temp files when big.',
+      digest: 'd503d734868a',
+      capitals: [{ at: 'def:buildkey', say: 'a line to a key memcmp can compare' }],
+      important: [
+        { at: 'type:Key', say: 'the key, and the line it came from', weight: 2 },
+        { at: 'def:kcmp', say: 'every comparison is a memcmp', weight: 3 },
+        { at: 'def:dofile', say: 'lines read; too many: a sorted temp file', weight: 2 },
+        { at: 'def:rsort4', say: 'a radix sort on the key bytes', weight: 2 },
+        { at: 'def:mergefiles', say: 'temp files merged', weight: 2 },
+        { at: 'def:dokey_gn', say: '-n, -g: a number encoded to sort as bytes', weight: 1 },
+        { at: 'def:doargs', say: 'the old +pos -pos and -k syntax', weight: 1 },
+      ],
+    },
+    'uniq.c': {
+      summary: 'uniq: adjacent duplicate lines dropped (-u only unique, -d only repeated, -c counted).',
+      digest: '3b3e888da080',
+      important: [{ at: 'def:equal', say: 'two lines, fields and chars skipped (-n, +n)', weight: 2 }],
+    },
+    'join.c': {
+      summary: 'join: two files sorted on a field merged into lines of the matching pairs, a relational join.',
+      digest: 'dc1531dc2bfd',
+      important: [
+        { at: 'def:join', say: 'the merge; equal keys: every pair', weight: 3 },
+        { at: 'def:output', say: '-o: the fields chosen', weight: 1 },
+      ],
+    },
+    'tr.c': {
+      summary: 'tr: characters translated, deleted (-d), squeezed (-s), or the complement (-c), UTF-8 aware.',
+      digest: 'b3eab133270d',
+      important: [
+        { at: 'def:translit', say: 'string1 to string2, rune by rune', weight: 2 },
+        { at: 'def:complement', say: '-c: all runes but these', weight: 1 },
+        { at: 'type:Pcb', say: 'a spec parsed: ranges a-z expanded as read', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts("McIlroy's pipeline: tr | sort | uniq | sed", [
+      ['tr.c', 'characters mapped'],
+      ['sort.c', 'lines ordered'],
+      ['uniq.c', 'repeated lines merged'],
+      ['join.c', 'two sorted files joined'],
+      ['sed.c', 'lines edited by a script'],
+      ['../../../lib_strings/libregexp/', 'libregexp: sed\'s patterns'],
+    ], [
+      ['tr.c', 'sort.c', 'words, a line each'],
+      ['sort.c', 'uniq.c', 'sorted lines'],
+      ['sort.c', 'join.c', 'sorted on the key'],
+      ['uniq.c', 'sed.c', 'counted lines'],
+      ['sed.c', '../../../lib_strings/libregexp/', 'regcomp, regexec'],
+    ]),
+    skeletons.cmd('sed: the stream editor', 'sed.c:def:main', [
+      ['sed.c:def:fcomp', 'the script compiled', '-e, -f or argv'],
+      ['sed.c:def:dechain', 'labels resolved', 'the commands'],
+      ['sed.c:def:execute', 'each line', 'the inputs'],
+      ['sed.c:def:command', 'a command run', 'executable'],
+      ['sed.c:def:substitute', 's: match and replace', 's'],
+    ]),
+    skeletons.cmd('sort', 'sort.c:def:main', [
+      ['sort.c:def:doargs', 'the keys and options', 'argv'],
+      ['sort.c:def:dofile', 'lines read, their keys built', 'each file'],
+      ['sort.c:def:buildkey', 'a line to bytes', 'each line'],
+      ['sort.c:def:sort4', 'radix or bubble sort', 'the lines'],
+      ['sort.c:def:mergeout', 'the temp files merged', 'big input'],
+    ], main_role='main: doargs (not ARGBEGIN: +pos -pos), then the files'),
+    skeletons.cmd('uniq', 'uniq.c:def:main', [
+      ['uniq.c:def:gline', 'the next line', 'stdin'],
+      ['uniq.c:def:equal', 'the same as the last?', 'two lines'],
+      ['uniq.c:def:pline', 'printed (with its count)', 'a group ends'],
+    ], main_role='main: -u -d -c, -n, +n by hand'),
+    skeletons.cmd('join', 'join.c:def:main', [
+      ['join.c:def:join', 'both files merged on the key', 'two files'],
+      ['join.c:def:output', 'a pair printed', 'equal keys'],
+    ]),
+    skeletons.cmd('tr: translate characters', 'tr.c:def:main', [
+      ['tr.c:def:delete', '-d', 'string1'],
+      ['tr.c:def:complement', '-c', 'string1'],
+      ['tr.c:def:translit', 'string1 to string2', 'both'],
+    ]),
+  ],
+}

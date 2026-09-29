@@ -1,0 +1,110 @@
+// kernel/buses/user/usb/disk/: what the code map says of it (tinybox
+// codemap; the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). Not a source: mkscsierrs, the rc script making the SCSI
+// error messages' table.
+local skeletons = import '../../../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'usb/disk: USB mass storage served as files (/dev/sdUxxx: data, raw, ctl), SCSI commands over the bulk-only transport.',
+  files: {
+    'disk.c': {
+      digest: '68dcb8f88896',
+      summary: 'The mass storage driver: a file tree per LUN, its reads and writes as SCSI requests wrapped in CBW and CSW.',
+      capitals: [
+        { at: 'def:umsrequest', say: 'a SCSI command sent over USB' },
+      ],
+      important: [
+        { at: 'comment:"supports only the scsi command interface, not ata"', say: 'SCSI inside USB, the only kind', weight: 1 },
+        { at: 'def:diskmain', say: 'a disk: endpoints, reset, a tree per LUN', weight: 2 },
+        { at: 'def:findendpoints', say: 'the bulk-in and bulk-out endpoints', weight: 1 },
+        { at: 'def:umsinit', say: 'LUNs counted, each inquired and sized', weight: 2 },
+        { at: 'comment:"we use %r later even for n == 0"', say: 'command, data, then the status wrapper', weight: 1 },
+        { at: 'def:umsrecover', say: 'a failed transfer: reset and clear stalls', weight: 1 },
+        { at: 'def:dread', say: "the data file read: blocks through SRread", weight: 3 },
+        { at: 'def:dwrite', say: 'written: partial blocks read first', weight: 2 },
+      ],
+      links: [
+        { from: 'def:dread', to: 'def:umscapacity' },
+        { from: 'def:diskmain', to: 'def:umsinit' },
+      ],
+    },
+    'main.c': {
+      digest: 'e0c2a6611257',
+      summary: 'usb/disk as a program: a file server started, then the storage devices (class 8) found.',
+    },
+    'scsireq.c': {
+      digest: '9d02e41542c8',
+      summary: "SCSI requests (scuzz's code, tweaked for USB): read, write, inquiry, capacity, sense on error.",
+      important: [
+        { at: 'comment:"This is /sys/src/cmd/scuzz/scsireq.c"', say: 'borrowed from scuzz, the SCSI tool', weight: 1 },
+        { at: 'def:SRrequest', say: 'every command: sent, then sense if it failed', weight: 3 },
+        { at: 'def:request', say: 'down to umsrequest: over USB', weight: 2 },
+        { at: 'def:SRread', say: 'READ(10): blocks at an LBA', weight: 2 },
+        { at: 'def:SRrcapacity', say: 'the size: last block, block length', weight: 1 },
+        { at: 'def:SRreqsense', say: 'REQUEST SENSE: what went wrong', weight: 1 },
+      ],
+    },
+    'scsireq.h': {
+      digest: 'c54e059ea551',
+      summary: "ScsiReq, a SCSI request and its device's state, and the big-endian helpers; shared with cdfs.",
+      important: [
+        { at: 'type:ScsiReq', say: 'a unit, its command, data and sense', weight: 2 },
+        { at: 'type:ScsiPtr', say: 'a buffer and its count', weight: 1 },
+      ],
+    },
+    'ums.h': {
+      digest: 'c118f2eb9670',
+      summary: "USB mass storage's structures: Ums (a device), Umsc (a LUN), Cbw and Csw (the bulk-only wrappers).",
+      important: [
+        { at: 'type:Cbw', say: 'command block wrapper: "USBC", tag, SCSI bytes', weight: 2 },
+        { at: 'type:Csw', say: 'command status wrapper: "USBS", residue, status', weight: 2 },
+        { at: 'type:Ums', say: 'a device: its endpoints, its LUNs', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.cmd('usb/disk: a disk as files', 'main.c:def:threadmain', [
+      ['../lib/fs.c:def:usbfsinit', 'the file server, on /dev', 'first'],
+      ['../lib/devs.c:def:startdevs', 'the storage devices found', 'then'],
+      ['disk.c:def:diskmain', 'a device: its LUNs, their trees', 'each'],
+      ['disk.c:def:dread', 'a file read', '9P Tread'],
+      ['scsireq.c:def:SRread', 'a SCSI READ', 'blocks'],
+      ['disk.c:def:umsrequest', 'CBW, data, CSW on the bulk pipes', 'the command'],
+    ]),
+    {
+      name: 'SCSI over USB: a request and its wrappers',
+      bones: [
+        { at: 'disk.c:def:diskmain', role: 'a device set up' },
+        { at: 'disk.c:def:umsinit', role: 'its LUNs' },
+        { at: 'disk.c:def:dread', role: 'the data file read' },
+        { at: 'disk.c:def:umsrequest', role: 'the command over the bulk pipes' },
+        { at: 'ums.h:type:Cbw', role: 'before' },
+        { at: 'ums.h:type:Csw', role: 'after' },
+        { at: 'disk.c:def:umsrecover', role: 'on failure' },
+      ],
+      joints: [
+        { from: 'disk.c:def:diskmain', to: 'disk.c:def:umsinit', say: 'the Ums' },
+        { from: 'disk.c:def:dread', to: 'disk.c:def:umsrequest', say: 'through SRread' },
+        { from: 'disk.c:def:umsrequest', to: 'ums.h:type:Cbw', say: 'written' },
+        { from: 'disk.c:def:umsrequest', to: 'ums.h:type:Csw', say: 'read' },
+        { from: 'disk.c:def:umsrequest', to: 'disk.c:def:umsrecover', say: 'an error' },
+      ],
+    },
+    {
+      name: 'A SCSI request',
+      bones: [
+        { at: 'scsireq.c:def:SRread', role: 'a command built' },
+        { at: 'scsireq.c:def:SRrequest', role: 'every command goes here' },
+        { at: 'scsireq.c:def:request', role: 'the transport' },
+        { at: 'disk.c:def:umsrequest', role: 'USB' },
+        { at: 'scsireq.c:def:SRreqsense', role: 'the error asked' },
+      ],
+      joints: [
+        { from: 'scsireq.c:def:SRread', to: 'scsireq.c:def:SRrequest', say: 'cmd and data' },
+        { from: 'scsireq.c:def:SRrequest', to: 'scsireq.c:def:request', say: 'sent' },
+        { from: 'scsireq.c:def:request', to: 'disk.c:def:umsrequest', say: 'wrapped' },
+        { from: 'scsireq.c:def:SRrequest', to: 'scsireq.c:def:SRreqsense', say: 'check condition' },
+      ],
+    },
+  ],
+}

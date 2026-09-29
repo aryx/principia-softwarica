@@ -1,0 +1,121 @@
+// lib_graphics/libmemlayer/: what the code map says of it (Graphics.nw,
+// chapter "Overlapping Layers": windows as Memimages that know what
+// covers them, their hidden parts kept in a save image)
+local kinds = ['def:', 'type:', 'comment:', 'code:', 'line:', 'section:', 'module:'];
+local here(file, a) = if std.length(std.filter(function(k) std.startsWith(a, k), kinds)) > 0 then file + ':' + a else a;
+local mod(file, name, bones, joints=[]) = {
+  name: name,
+  bones: [{ at: here(file, b[0]), role: b[1] } for b in bones],
+  joints: [{ from: here(file, j[0]), to: here(file, j[1]), say: j[2] } for j in joints],
+};
+local fn(name) = 'comment:"function [[' + name + ']]"';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libmemlayer: overlapping windows in the kernel -- a draw on a layer split into its visible parts (on the screen) and its hidden ones (in a save image).",
+  files: {
+    'draw.c': {
+      summary: 'memdraw: memimagedraw for layers, each piece of the destination drawn where it lives, screen or save area.',
+      digest: '5d78deeddebe',
+      capitals: [{ at: 'def:memdraw', say: "drawmesg's draw: layers first" }],
+      important: [
+        { at: 'def:ldrawop', say: 'one piece: on the screen, or in the save image', weight: 3 },
+        { at: 'code:"_memlayerop(ldrawop, dst, r, r, &d)"', say: 'the destination split by what covers it', weight: 3 },
+        { at: 'type:Draw', say: "the call's arguments, carried through the split", weight: 1 },
+      ],
+    },
+    'layerop.c': {
+      summary: "_memlayerop: a rectangle of a layer split recursively by the layers in front of it, fn called on each piece.",
+      digest: '92c9719036d1',
+      capitals: [{ at: 'def:_memlayerop', say: 'the heart of layers: visible or obscured' }],
+      important: [
+        { at: 'def:_layerop', say: 'recursion down the stack of windows in front', weight: 3 },
+        { at: 'comment:"no one is in front of this part of window"', weight: 2 },
+      ],
+    },
+    'lalloc.c': {
+      summary: 'memlalloc: a new layer (a window) on a screen, its save image, at the front.',
+      digest: '6c8a836e7c7a',
+      important: [{ at: 'def:memlalloc', weight: 2 }],
+    },
+    'ltofront.c': {
+      summary: "A layer brought to the front: what it covered saved, what covered it restored.",
+      digest: 'c9756c49e20e',
+      important: [{ at: 'def:_memltofront', weight: 2 }, { at: 'def:memltofrontn', weight: 1 }],
+    },
+    'ltorear.c': {
+      summary: 'A layer sent to the back, the layers it uncovers exposed.',
+      digest: 'f7e70d1961c7',
+    },
+    'lhide.c': {
+      summary: 'Hiding a part of a layer (save it) and exposing it (restore it, or ask for a refresh).',
+      digest: 'ebd077267de8',
+      important: [{ at: 'def:memlhide', weight: 1 }, { at: 'def:memlexpose', weight: 1 }],
+    },
+    'ldelete.c': {
+      summary: 'A layer deleted: the layers under it exposed.',
+      digest: 'dce2f1f65427',
+    },
+    'lorigin.c': {
+      summary: 'A layer moved on the screen, or its logical origin changed.',
+      digest: 'ab30d860089f',
+    },
+    'line.c': {
+      summary: 'memline: a line on a layer, split like a draw.',
+      digest: 'e5ab089abba6',
+      important: [{ at: 'def:_memline', weight: 2 }, { at: fn('llineop'), weight: 1 }],
+    },
+    'load.c': {
+      summary: 'memload: pixels loaded into a layer, piece by piece.',
+      digest: '6c3b359eda1f',
+    },
+    'unload.c': {
+      summary: 'memunload: pixels read from a layer, from the screen or its save image.',
+      digest: '0d66a7879b83',
+    },
+    'lsetrefresh.c': {
+      summary: 'How a layer is refreshed when exposed: from its save image, by a function, or not.',
+      digest: '79104590c994',
+    },
+  },
+  skeletons: [
+    {
+      name: 'libmemlayer: operations on layers, all split by _memlayerop',
+      bones: [
+        { at: 'draw.c', role: 'drawing on a layer' },
+        { at: 'line.c', role: 'lines on a layer' },
+        { at: 'layerop.c', role: 'the split: visible pieces and hidden ones' },
+        { at: 'lalloc.c', role: 'a layer made' },
+        { at: 'ltofront.c', role: 'raised: what rio asks on a click' },
+        { at: 'lhide.c', role: 'hide and expose: save and restore' },
+        { at: '../libmemdraw/', role: 'the pixels, on the screen or saved' },
+      ],
+      joints: [
+        { from: 'draw.c', to: 'layerop.c', say: 'a rectangle and ldrawop' },
+        { from: 'line.c', to: 'layerop.c', say: 'llineop' },
+        { from: 'ltofront.c', to: 'lhide.c', say: 'covered parts' },
+        { from: 'layerop.c', to: '../libmemdraw/', say: 'memimagedraw on each piece' },
+      ],
+    },
+    mod('draw.c', 'memdraw: a draw split among visible and hidden pieces', [
+      ['def:memdraw', 'the call'],
+      ['type:Draw', 'its arguments'],
+      ['layerop.c:def:_memlayerop', 'the split'],
+      ['def:ldrawop', 'a piece drawn'],
+      ['../libmemdraw/draw.c:def:memimagedraw', 'the pixels'],
+    ], [
+      ['def:memdraw', 'layerop.c:def:_memlayerop', 'd, ldrawop'],
+      ['layerop.c:def:_memlayerop', 'def:ldrawop', 'each piece'],
+      ['def:ldrawop', '../libmemdraw/draw.c:def:memimagedraw', 'screen or save image'],
+    ]),
+    mod('line.c', 'memline: a line split among pieces', [
+      ['def:memline', 'the call'],
+      ['def:_memline', 'its bounding box, the split'],
+      [fn('llineop'), 'a piece'],
+      ['layerop.c:def:_memlayerop', 'the split'],
+    ], [
+      ['def:memline', 'def:_memline', 'the line'],
+      ['def:_memline', 'layerop.c:def:_memlayerop', 'llineop'],
+      ['layerop.c:def:_memlayerop', fn('llineop'), 'each piece'],
+    ]),
+  ],
+}

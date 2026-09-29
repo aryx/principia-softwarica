@@ -1,0 +1,137 @@
+// windows/plumb/: what the code map says of it (Pike's plumber: rules
+// matched against messages, a file server of ports)
+local skeletons = import '../../skeletons.libsonnet';
+local sig(name, args) = 'code:"' + name + '(' + args + '"';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The plumber: messages written to /mnt/plumb/send matched against the user's rules, then delivered to a port or starting a program.",
+  files: {
+    'plumber.c': {
+      summary: "plumber's threadmain: $home/lib/plumbing read, a port per rule set, the file server started.",
+      digest: '27f9bf6c59cd',
+      capitals: [{ at: 'def:threadmain', say: 'the plumber starts' }],
+      important: [{ at: 'code:"rules = readrules(plumbfile, fd)"', say: 'the rules, parsed once', weight: 2 }, { at: 'def:mainproc', weight: 1 }],
+    },
+    'plumber.h': {
+      summary: "The plumber's rules: a Ruleset (a pattern list and a port), its Rules (object, verb, argument), an Exec (a match's variables).",
+      digest: '76437ab2bd9c',
+      capitals: [{ at: 'code:"struct Ruleset"', say: 'a rule set: patterns, then where to' }],
+      important: [{ at: 'code:"struct Rule"', weight: 2 }, { at: 'code:"struct Exec"', weight: 1 }],
+    },
+    'rules.c': {
+      summary: 'The rules file parsed: variables, includes, rule sets separated by blank lines; and printed back.',
+      digest: '547cffe6b7aa',
+      important: [{ at: 'def:readrules', weight: 2 }, { at: 'def:readruleset', say: 'lines until a blank one', weight: 2 }, { at: 'def:parserule', weight: 1 }, { at: 'def:expand', say: '$variables expanded', weight: 1 }],
+    },
+    'match.c': {
+      summary: 'A message matched against a rule set (regexps, isfile, click), then plumbed to a port or started.',
+      digest: '47ce90acd6b5',
+      capitals: [{ at: 'def:matchruleset', say: 'does this rule set apply?' }],
+      important: [{ at: 'def:verbmatches', weight: 2 }, { at: 'def:clickmatch', say: 'the word around the click', weight: 1 }, { at: 'def:startup', say: 'start: a program run', weight: 2 }],
+    },
+    'fsys.c': {
+      summary: "The plumber's file server: /mnt/plumb/send written, the rules applied, messages queued for the ports' readers.",
+      digest: '5d11d5a52904',
+      important: [
+        { at: sig('fsysproc', 'void*)'), say: 'the 9P loop', weight: 2 },
+        { at: sig('fsyswrite', 'Fcall *t, uchar *buf, Fid *f)'), say: 'a message sent: every rule set tried', weight: 3 },
+        { at: sig('dispose', 'Fcall *t, uchar *buf, Plumbmsg *m'), say: 'to a port, or a program started', weight: 3 },
+        { at: sig('queuesend', 'Dirtab *d, Plumbmsg *m)'), weight: 1 },
+        { at: sig('drainqueue', 'Dirtab *d)'), say: 'queued messages to waiting readers', weight: 1 },
+      ],
+    },
+    'plumb.c': {
+      summary: 'plumb: a message built from the command line and sent.',
+      digest: '0f0233f7ad4d',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('plumber: a message plumbed', 'plumber.c:def:threadmain', [
+      ['rules.c:def:readrules', 'the rules read', 'the file'],
+      ['fsys.c:' + sig('startfsys', 'void)'), 'the file server posted and mounted', 'in mainproc'],
+      ['fsys.c:' + sig('fsyswrite', 'Fcall *t, uchar *buf, Fid *f)'), 'a message written to send', 'Twrite'],
+      ['match.c:def:matchruleset', 'each rule set tried', 'the message'],
+      ['fsys.c:' + sig('dispose', 'Fcall *t, uchar *buf, Plumbmsg *m'), 'delivered or started', 'a match'],
+    ], main_role='threadmain: -p rules file, then the servers in another proc'),
+    {
+      name: 'plumber.c: started from another proc',
+      bones: [
+        { at: 'plumber.c:def:threadmain', role: 'flags, the rules read' },
+        { at: 'plumber.c:def:mainproc', role: 'a proc: ports, file server' },
+        { at: 'plumber.c:def:makeports', role: 'a port per rule set' },
+        { at: 'fsys.c:' + sig('startfsys', 'void)'), role: 'the server' },
+      ],
+      joints: [
+        { from: 'plumber.c:def:threadmain', to: 'plumber.c:def:mainproc', say: 'proccreate, so main can return' },
+        { from: 'plumber.c:def:mainproc', to: 'plumber.c:def:makeports', say: 'the rules' },
+        { from: 'plumber.c:def:mainproc', to: 'fsys.c:' + sig('startfsys', 'void)'), say: 'then' },
+      ],
+    },
+    skeletons.cmd('plumb: a message from the command line', 'plumb.c:def:main', [
+      ['plumb.c:def:gather', 'the arguments as data', 'argv'],
+      ['../libplumb/mesg.c:comment:"function [[plumbsend]]"', 'sent', 'a Plumbmsg'],
+    ]),
+    skeletons.parts('The plumber: its parts', [
+      ['plumber.c', 'the start'],
+      ['rules.c', 'the rules parsed'],
+      ['plumber.h', 'rule sets'],
+      ['fsys.c', 'the ports, as files'],
+      ['match.c', 'messages against rules'],
+      ['plumb.c', 'a client'],
+    ], [
+      ['plumber.c', 'rules.c', 'the file'],
+      ['rules.c', 'plumber.h', 'Rulesets'],
+      ['plumber.c', 'fsys.c', 'startfsys'],
+      ['fsys.c', 'match.c', 'a message'],
+      ['plumb.c', 'fsys.c', 'writes send'],
+    ]),
+    {
+      name: 'fsys.c: the plumber as a file server',
+      bones: [
+        { at: 'fsys.c:' + sig('fsysproc', 'void*)'), role: 'the loop' },
+        { at: 'fsys.c:code:"(*fcall[Tmax])(Fcall*, uchar*, Fid*)"', role: 'methods by type' },
+        { at: 'fsys.c:' + sig('fsyswrite', 'Fcall *t, uchar *buf, Fid *f)'), role: 'send written' },
+        { at: 'fsys.c:' + sig('dispose', 'Fcall *t, uchar *buf, Plumbmsg *m'), role: 'the outcome' },
+        { at: 'fsys.c:' + sig('queuesend', 'Dirtab *d, Plumbmsg *m)'), role: 'queued for a port' },
+        { at: 'fsys.c:' + sig('fsysread', 'Fcall *t, uchar *buf, Fid *f)'), role: 'a port read' },
+      ],
+      joints: [
+        { from: 'fsys.c:' + sig('fsysproc', 'void*)'), to: 'fsys.c:code:"(*fcall[Tmax])(Fcall*, uchar*, Fid*)"', say: 'a request' },
+        { from: 'fsys.c:code:"(*fcall[Tmax])(Fcall*, uchar*, Fid*)"', to: 'fsys.c:' + sig('fsyswrite', 'Fcall *t, uchar *buf, Fid *f)'), say: 'Twrite' },
+        { from: 'fsys.c:' + sig('fsyswrite', 'Fcall *t, uchar *buf, Fid *f)'), to: 'fsys.c:' + sig('dispose', 'Fcall *t, uchar *buf, Plumbmsg *m'), say: 'a match' },
+        { from: 'fsys.c:' + sig('dispose', 'Fcall *t, uchar *buf, Plumbmsg *m'), to: 'fsys.c:' + sig('queuesend', 'Dirtab *d, Plumbmsg *m)'), say: 'plumb to' },
+        { from: 'fsys.c:' + sig('queuesend', 'Dirtab *d, Plumbmsg *m)'), to: 'fsys.c:' + sig('fsysread', 'Fcall *t, uchar *buf, Fid *f)'), say: 'a waiting reader' },
+      ],
+    },
+    {
+      name: 'match.c: a rule set tried',
+      bones: [
+        { at: 'match.c:def:matchruleset', role: 'every pattern must match' },
+        { at: 'match.c:def:matchpat', role: 'one pattern' },
+        { at: 'match.c:def:verbmatches', role: 'matches, is, set...' },
+        { at: 'match.c:def:clickmatch', role: 'the word under the click' },
+        { at: 'match.c:def:startup', role: 'start: the program run' },
+      ],
+      joints: [
+        { from: 'match.c:def:matchruleset', to: 'match.c:def:matchpat', say: 'each pattern' },
+        { from: 'match.c:def:matchpat', to: 'match.c:def:verbmatches', say: 'a regexp' },
+        { from: 'match.c:def:verbmatches', to: 'match.c:def:clickmatch', say: 'a click attribute' },
+      ],
+    },
+    {
+      name: 'rules.c: the rules file read',
+      bones: [
+        { at: 'rules.c:def:readrules', role: 'the file' },
+        { at: 'rules.c:def:readruleset', role: 'a rule set' },
+        { at: 'rules.c:def:parserule', role: 'a rule' },
+        { at: 'rules.c:def:expand', role: '$variables' },
+        { at: 'rules.c:def:include', role: 'include another file' },
+      ],
+      joints: [
+        { from: 'rules.c:def:readrules', to: 'rules.c:def:readruleset', say: 'until EOF' },
+        { from: 'rules.c:def:readruleset', to: 'rules.c:def:parserule', say: 'each line' },
+        { from: 'rules.c:def:parserule', to: 'rules.c:def:expand', say: 'words' },
+      ],
+    },
+  ],
+}

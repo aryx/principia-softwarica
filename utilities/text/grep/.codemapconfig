@@ -1,0 +1,103 @@
+// utilities/text/grep/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// The book: Utilities.nw, "Search and Replace", grep. grep.y (the regexp
+// grammar and its lexer) is yacc, not a source for the map: a whole bone.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "grep: its own regexp engine, a yacc grammar to a graph of Re nodes, matched by a DFA built lazily, a state per new byte.",
+  files: {
+    'main.c': {
+      summary: "grep's driver: the flags, the pattern(s) compiled, each file searched a buffer at a time through the DFA.",
+      digest: 'cb81f698f7f5',
+      capitals: [{ at: 'def:search', say: 'the inner loop: one table lookup per byte' }],
+      important: [
+        { at: 'code:"state0 = initstate_(topre.beg)"', say: 'the DFA starts as one state', weight: 2 },
+        { at: 'code:"ns = s->next[c]"', say: 'the transition, cached: the fast path', weight: 3 },
+        { at: 'code:"increment(s, c)"', say: 'a transition never seen: computed now', weight: 3 },
+        { at: 'code:"!!s->match == !(flag&Vflag)"', say: 'a match, or with -v a non-match', weight: 2 },
+        { at: 'def:initstate_', say: 'addcase, then the first follow set', weight: 2 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:search' },
+        { from: 'def:main', to: 'def:initstate_' },
+      ],
+    },
+    'comp.c': {
+      summary: 'The DFA built on demand: a state is a sorted set of Re nodes, found or added in a binary tree of states.',
+      digest: 'a7c84c48c254',
+      capitals: [{ at: 'def:increment', say: 'a new state: the follow set on byte c' }],
+      important: [
+        { at: 'def:fol1', say: 'the nodes reachable on c: an NFA step', weight: 3 },
+        { at: 'code:"for(tt=&state0; t = *tt;)"', say: 'the set looked up among existing states', weight: 2 },
+        { at: 'def:re2class', say: '[a-z]: a class as rune pairs', weight: 1 },
+        { at: 'def:rclass', say: 'a class range split across UTF-8 bytes', weight: 1 },
+      ],
+    },
+    'sub.c': {
+      summary: "The regexp graph's construction: allocation, the grammar's actions (cat, star, or), Tcase tables for big alternations.",
+      digest: '4c6af45e5919',
+      important: [
+        { at: 'def:str2top', say: 'a pattern parsed by yyparse', weight: 3 },
+        { at: 'def:re2cat', say: 'ab: the dangling ends of a patched to b', weight: 2 },
+        { at: 'def:re2star', say: 'a*: a loop through an Talt', weight: 2 },
+        { at: 'def:re2or', say: 'a|b: a Tor node', weight: 1 },
+        { at: 'def:addcase', say: 'many alternatives: a 256-entry dispatch', weight: 2 },
+        { at: 'def:patchnext', say: 'the list of unresolved next links filled', weight: 1 },
+      ],
+    },
+    'globals.c': {
+      summary: "grep's globals: the flags, the top regexp, the first DFA state, the follow set being built.",
+      digest: 'd528578b8e7a',
+    },
+    'grep.h': {
+      summary: "grep's types: Re (a regexp node), Re2 (a fragment's begin and end), State (a DFA state, its 256 next).",
+      digest: '8b0a99c9e84a',
+      capitals: [
+        { at: 'type:State', say: 'a DFA state: its Re set, 256 transitions' },
+        { at: 'type:Re', say: 'a regexp node: class, alt, or, case, anchor' },
+      ],
+      important: [
+        { at: 'type:Re2', say: 'a fragment: begin, and the ends to patch', weight: 2 },
+        { at: 'code:"Caselim     = 7"', say: '7 alternatives or more: a Tcase table', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('grep: a regexp compiler and a lazy DFA', [
+      ['grep.y', 'the regexp grammar and lexer (yacc)'],
+      ['sub.c', 'builds the Re graph'],
+      ['comp.c', 'the DFA, state by state'],
+      ['main.c', 'the flags, the search loop'],
+      ['grep.h', 'Re, State'],
+      ['globals.c', 'the shared state'],
+    ], [
+      ['main.c', 'sub.c', 'str2top: the pattern'],
+      ['sub.c', 'grep.y', 'yyparse'],
+      ['grep.y', 'sub.c', 're2cat, re2star, re2or'],
+      ['main.c', 'comp.c', 'increment: a missing transition'],
+      ['comp.c', 'grep.h', 'State'],
+    ]),
+    skeletons.cmd('grep: search', 'main.c:def:main', [
+      ['sub.c:def:str2top', 'the pattern parsed to Re nodes', '-e, -f or argv[0]'],
+      ['main.c:def:initstate_', 'the first DFA state', 'the Re graph'],
+      ['main.c:def:search', 'each byte: s = s->next[c]', 'each file'],
+      ['comp.c:def:increment', 'a new state, when next[c] is empty', 'a miss'],
+      ['comp.c:def:fol1', 'the follow set on c', 'each Re of s'],
+    ]),
+    skeletons.chain('comp.c: a DFA state made from a byte', [
+      ['comp.c:def:increment', 'state s, byte c: which state next?', ''],
+      ['comp.c:def:fol1', 'each Re of s stepped on c', 'each Re'],
+      ['comp.c:def:fcmp', 'the follow set sorted: a canonical key', 'the set'],
+      ['comp.c:def:increment', 'found in the tree of states, else added', 'the key'],
+    ]),
+    skeletons.chain('sub.c: a pattern into a graph', [
+      ['sub.c:def:str2top', 'the pattern handed to yyparse', ''],
+      ['sub.c:def:re2char', 'a character: one Tclass node', 'a literal'],
+      ['sub.c:def:re2cat', 'concatenation: ends patched', 'ab'],
+      ['sub.c:def:re2star', 'repetition: a Talt loop', 'a*'],
+      ['sub.c:def:re2or', 'alternation: a Tor', 'a|b'],
+      ['sub.c:def:addcase', 'big alternations: a Tcase table', 'initstate_'],
+    ]),
+  ],
+}

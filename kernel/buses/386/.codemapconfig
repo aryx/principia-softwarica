@@ -1,0 +1,123 @@
+// kernel/buses/386/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The PC's buses: PCI (devices found, their interrupts routed), the 8250 serial chip, the ISA 8237 DMA.",
+  files: {
+    'pci.c': {
+      digest: 'f9483e95e484',
+      summary: 'PCI: config space read (ports 0xCF8 or the BIOS), the buses scanned into Pcidevs, interrupts routed.',
+      capitals: [
+        { at: 'def:pcimatch', say: 'a driver finds its card: vendor, device id' },
+      ],
+      important: [
+        { at: 'comment:"Needs a massive rewrite"', say: "the author's own verdict", weight: 1 },
+        { at: 'def:pcicfginit', say: 'config mechanism chosen, buses scanned, once', weight: 3 },
+        { at: 'def:pcilscan', say: 'a bus scanned: each slot a Pcidev, bridges recursed', weight: 3 },
+        { at: 'def:pcibusmap', say: "BARs sized and placed when the BIOS didn't", weight: 1 },
+        { at: 'def:pcirouting', say: "interrupts routed by the BIOS's $PIR table", weight: 2 },
+        { at: 'def:southbridges', say: 'a table of chipsets: how each routes an IRQ', weight: 1 },
+        { at: 'def:pcisetbme', say: 'bus mastering on: the card may DMA', weight: 1 },
+      ],
+      links: [
+        { from: 'def:pcicfginit', to: 'def:pcilscan' },
+        { from: 'def:pcicfginit', to: 'def:pcirouting' },
+      ],
+    },
+    'uarti8250.c': {
+      digest: 'a4900243be63',
+      summary: "The PC's serial chip, the 8250/16550, as a PhysUart: registers, FIFO, the interrupt.",
+      important: [
+        { at: 'code:"PhysUart i8250physuart = {"', say: "the chip's operations, for devuart", weight: 3 },
+        { at: 'def:i8250interrupt', say: 'bytes to uartrecv, the transmitter refilled', weight: 3 },
+        { at: 'def:i8250kick', say: 'output: the FIFO filled from the queue', weight: 2 },
+        { at: 'def:i8250enable', say: 'FIFO, interrupts, DTR and RTS on', weight: 1 },
+        { at: 'def:i8250baud', say: 'the divisor latch: 115200/baud', weight: 1 },
+        { at: 'def:i8250console', say: 'the serial console, from plan9.ini', weight: 2 },
+      ],
+      related: ['../devuart.c', 'uartisa.c'],
+    },
+    'uartisa.c': {
+      digest: '503fbc4efda9',
+      summary: 'Serial ports configured as ISA cards (plan9.ini), each driven by the 8250 code.',
+      important: [
+        { at: 'code:"PhysUart isaphysuart = {"', say: 'pnp: the ISA ports found', weight: 2 },
+      ],
+    },
+    'dma.c': {
+      digest: '1ec0615f42ac',
+      summary: "The ISA DMA controllers (two 8237s): the floppy's and the Sound Blaster's transfers, below 16MB.",
+      important: [
+        { at: 'type:DMA', say: 'a controller: its ports, its channels', weight: 1 },
+        { at: 'def:dmainit', say: 'a channel given a bounce buffer below 16MB', weight: 2 },
+        { at: 'def:dmasetup', say: 'address, count, mode written to the 8237', weight: 3 },
+        { at: 'def:dmaend', say: 'the transfer over; a read copied from the buffer', weight: 2 },
+      ],
+    },
+  },
+  skeletons: [
+    {
+      name: "The PC's buses and their users",
+      bones: [
+        { at: 'pci.c', role: 'PCI: the cards found' },
+        { at: 'uarti8250.c', role: 'the 8250 serial chip' },
+        { at: 'uartisa.c', role: 'its ISA ports' },
+        { at: '../devuart.c', role: '#t, above the chip' },
+        { at: 'dma.c', role: 'the 8237 DMA' },
+        { at: '../../devices/storage/386/devfloppy.c', role: 'the floppy, a DMA user' },
+      ],
+      joints: [
+        { from: 'uartisa.c', to: 'uarti8250.c', say: 'i8250alloc' },
+        { from: '../devuart.c', to: 'uarti8250.c', say: 'phys->kick...' },
+        { from: 'uarti8250.c', to: '../devuart.c', say: 'uartrecv' },
+        { from: '../../devices/storage/386/devfloppy.c', to: 'dma.c', say: 'dmasetup, dmaend' },
+      ],
+    },
+    {
+      name: 'PCI: config space to Pcidevs',
+      bones: [
+        { at: 'pci.c:def:pcicfginit', role: 'once: the mechanism, the scan' },
+        { at: 'pci.c:def:pcicfgrw32', role: 'config space read and written' },
+        { at: 'pci.c:def:pcilscan', role: 'a bus: its slots, its bridges' },
+        { at: 'pci.c:def:pcirouting', role: 'interrupts routed' },
+        { at: 'pci.c:def:pcimatch', role: "drivers' lookup" },
+      ],
+      joints: [
+        { from: 'pci.c:def:pcicfginit', to: 'pci.c:def:pcilscan', say: 'bus 0' },
+        { from: 'pci.c:def:pcilscan', to: 'pci.c:def:pcicfgrw32', say: 'ids, BARs' },
+        { from: 'pci.c:def:pcicfginit', to: 'pci.c:def:pcirouting', say: 'unless nopcirouting' },
+        { from: 'pci.c:def:pcilscan', to: 'pci.c:def:pcimatch', say: 'the Pcidev list' },
+      ],
+    },
+    {
+      name: 'The 8250: operations, interrupt, console',
+      bones: [
+        { at: 'uarti8250.c:code:"PhysUart i8250physuart = {"', role: "the chip's operations" },
+        { at: 'uarti8250.c:def:i8250enable', role: 'the chip enabled' },
+        { at: 'uarti8250.c:def:i8250interrupt', role: 'bytes in, FIFO refilled' },
+        { at: 'uarti8250.c:def:i8250kick', role: 'output started' },
+        { at: 'uarti8250.c:def:i8250console', role: 'the console at boot' },
+      ],
+      joints: [
+        { from: 'uarti8250.c:code:"PhysUart i8250physuart = {"', to: 'uarti8250.c:def:i8250enable', say: '.enable' },
+        { from: 'uarti8250.c:def:i8250enable', to: 'uarti8250.c:def:i8250interrupt', say: 'intrenable' },
+        { from: 'uarti8250.c:def:i8250interrupt', to: 'uarti8250.c:def:i8250kick', say: 'transmitter empty' },
+        { from: 'uarti8250.c:def:i8250console', to: 'uarti8250.c:code:"PhysUart i8250physuart = {"', say: 'consuart' },
+      ],
+    },
+    {
+      name: 'An ISA DMA transfer',
+      bones: [
+        { at: 'dma.c:def:dmainit', role: 'a channel and its buffer' },
+        { at: 'dma.c:def:dmasetup', role: 'the 8237 programmed' },
+        { at: 'dma.c:def:dmaend', role: 'the transfer finished' },
+        { at: 'dma.c:type:DMA', role: 'the two controllers' },
+      ],
+      joints: [
+        { from: 'dma.c:def:dmainit', to: 'dma.c:def:dmasetup', say: 'the bounce buffer' },
+        { from: 'dma.c:def:dmasetup', to: 'dma.c:type:DMA', say: 'ports written' },
+        { from: 'dma.c:def:dmasetup', to: 'dma.c:def:dmaend', say: "the device's interrupt, then" },
+      ],
+    },
+  ],
+}

@@ -1,0 +1,212 @@
+// database/libndb/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). Its API is include/db/ndb.h (Ndb, Ndbtuple, Ndbs); its users are
+// the network's servers (ndb/cs, ndb/dns), ipconfig, the auth servers.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "libndb: Plan 9's network database, attr=value text files searched through hash files and a cache.",
+  files: {
+    'ndbopen.c': {
+      summary: 'A database opened: /lib/ndb/local, then every file its database= entry lists, chained.',
+      digest: 'c0dcaf420232',
+      capitals: [{ at: 'def:ndbopen', say: 'the database: a chain of files' }],
+      important: [
+        { at: 'code:getenv("NDBFILE")', say: '$NDBFILE, else /lib/ndb/local', weight: 1 },
+        { at: 'code:ndbsearch(db, &s, "database", "")', say: 'the first file names the others', weight: 3 },
+        { at: 'def:ndbreopen', say: 'the file changed: cache and hash files dropped', weight: 2 },
+        { at: 'def:ndbclose', say: 'every file of the chain closed', weight: 1 },
+        { at: 'def:ndbchanged', say: 'a file rewritten since opened?', weight: 1 },
+      ],
+    },
+    'ndbhash.c': {
+      summary: 'The search: attr=val looked up by its hash file (attr.hash) when fresh, else a linear scan.',
+      digest: 'f29ef24231ef',
+      capitals: [
+        { at: 'def:ndbsearch', say: 'the first entry with attr=val' },
+        { at: 'def:ndbsnext', say: 'the next one, down the hash chain' },
+      ],
+      important: [
+        { at: 'def:ndbhash', say: 'the hash of a value, mod the table', weight: 1 },
+        { at: 'def:hfopen', say: 'a hash file used only if newer than the db', weight: 2 },
+        { at: 'code:_ndbcachesearch(db, s, attr, val, &t) == 0', say: 'the cache first, misses remembered too', weight: 2 },
+        { at: 'code:Missing or out of date hash file', say: 'a big file without hash: skipped, not scanned', weight: 3 },
+        { at: 'code:t = ndbsearch(db->next, s, attr, val)', say: 'not here: the next file of the chain', weight: 2 },
+        { at: 'def:match', say: 'the tuple with attr=val in an entry', weight: 1 },
+      ],
+      links: [{ from: 'def:ndbsearch', to: 'def:ndbsnext' }, { from: 'def:ndbsearch', to: 'def:hfopen' }],
+    },
+    'ndbparse.c': {
+      summary: 'An entry parsed: its lines, indented after the first, into tuples in two rings (entry, line).',
+      digest: '43326d353297',
+      capitals: [{ at: 'def:ndbparse', say: 'the next entry of a file, as tuples' }],
+      important: [
+        { at: 'comment:The parsing returns a 2-dimensional structure', say: 'entry links and line links', weight: 3 },
+        { at: 'code:!ISWHITE(*line)', say: 'a line at the margin: the next entry', weight: 2 },
+      ],
+    },
+    'ndbaux.c': {
+      summary: 'A line of attr=value pairs parsed into tuples: quotes, comments, the line ring.',
+      digest: 'd5f3a2c7327b',
+      important: [
+        { at: 'def:_ndbparsetuple', say: 'one attr or attr=value, quoted or not', weight: 2 },
+        { at: 'def:_ndbparseline', say: 'a line to a ring of tuples', weight: 2 },
+      ],
+    },
+    'ndbcache.c': {
+      summary: "A small cache of recent searches per file, answers and misses both, flushed when the file changes.",
+      digest: '4d0745b5f374',
+      important: [
+        { at: 'type:Ndbcache', say: 'attr, val, the answer and the search state', weight: 2 },
+        { at: 'def:_ndbcachesearch', say: 'a search answered from memory', weight: 2 },
+        { at: 'def:_ndbcacheadd', say: 'an answer kept, the oldest dropped', weight: 1 },
+      ],
+    },
+    'ndbhf.h': {
+      summary: "The library's private header: the hash file's record, the parser's and the cache's entry points.",
+      digest: '048ac83b34b2',
+      capitals: [{ at: 'type:Ndbhf', say: 'an attribute\'s hash file, open' }],
+      important: [{ at: 'def:ISWHITE', say: 'the white space ending an entry\'s line', weight: 1 }],
+    },
+    'ndbgetval.c': {
+      summary: 'A value by search: the entry with attr=val, and its rattr, the common question.',
+      digest: 'd6db9409d30e',
+      capitals: [{ at: 'def:ndbgetvalue', say: 'attr=val -> rattr, and the entry' }],
+      important: [{ at: 'def:ndbgetval', say: 'the old form, into a caller\'s buffer', weight: 1 }],
+    },
+    'ndbipinfo.c': {
+      summary: 'A system\'s attributes (ipgw, dns, auth...), the missing ones inherited from ever larger subnets.',
+      digest: '4361cf2df001',
+      capitals: [{ at: 'def:ndbipinfo', say: 'attributes of a host, inherited from its networks' }],
+      important: [
+        { at: 'def:mkfilter', say: 'the attributes asked for, as a list', weight: 1 },
+        { at: 'def:filter', say: 'only what is asked for, and still missing', weight: 2 },
+        { at: 'comment:keep turning off', say: 'a bit cleared per round: larger networks', weight: 3 },
+        { at: 'def:subnet', say: 'the entry of a network with that mask', weight: 2 },
+        { at: 'def:filtercomplete', say: 'all found: stop climbing', weight: 1 },
+        { at: 'comment:make one up', say: 'no ipmask anywhere: the class default', weight: 1 },
+      ],
+      links: [{ from: 'def:ndbipinfo', to: 'def:subnet' }, { from: 'def:ndbipinfo', to: 'def:filter' }],
+    },
+    'dnsquery.c': {
+      summary: 'A DNS question asked through the dns server\'s file (/net/dns), mounting /srv/dns if needed.',
+      digest: '55d3890b2395',
+      capitals: [{ at: 'def:dnsquery', say: 'a DNS lookup, as file I/O' }],
+      important: [
+        { at: 'code:mount(fd, -1, net, MBEFORE', say: 'no /net/dns: the server posted in /srv mounted', weight: 3 },
+        { at: 'def:mkptrname', say: 'an address reversed: 4.3.2.1.in-addr.arpa', weight: 1 },
+        { at: 'def:doquery', say: 'the question written, the answers read', weight: 2 },
+      ],
+    },
+    'csgetval.c': {
+      summary: 'A value through the connection server (/net/cs), which consults every database for us.',
+      digest: 'ed76c27b70ae',
+      capitals: [{ at: 'def:csgetvalue', say: 'ndbgetvalue asked of /net/cs' }],
+      important: [{ at: 'code:"/net/cs"', say: 'the question as a write to cs', weight: 2 }],
+    },
+    'csipinfo.c': {
+      summary: 'ndbipinfo asked of the connection server (/net/cs) instead of the files.',
+      digest: '287e82051ca3',
+      important: [{ at: 'def:csipinfo', say: 'ipinfo through cs', weight: 1 }],
+    },
+    'ipattr.c': {
+      summary: 'What a name is: ip, ipv6, sys or dom, guessed from its characters.',
+      digest: '9ba5fcfc5c73',
+      capitals: [{ at: 'def:ipattr', say: 'the attribute a string names' }],
+    },
+    'ndbfree.c': {
+      summary: 'Tuples made and freed: ndbnew, ndbfree, ndbsetval; malloc tags for leak hunting.',
+      digest: '2c14ed763129',
+      capitals: [{ at: 'def:ndbfree', say: 'an entry\'s tuples freed' }],
+      important: [
+        { at: 'def:ndbnew', say: 'a tuple attr=val', weight: 1 },
+        { at: 'def:ndbsetval', say: 'a long value kept outside the tuple', weight: 1 },
+        { at: 'def:ndbsetmalloctag', say: 'the caller\'s pc on each tuple: leaks traced', weight: 1 },
+      ],
+    },
+    'ndbgetipaddr.c': {
+      summary: 'The IP addresses of a name: a system\'s ip= tuples, or the name itself if it is one.',
+      digest: 'b95da69325d2',
+      important: [{ at: 'def:ndbgetipaddr', say: 'name -> ip tuples', weight: 1 }],
+    },
+    'ndblookval.c': {
+      summary: 'A tuple found by attribute in an entry: on the same line first, then anywhere.',
+      digest: '8efdb391f9a7',
+      important: [{ at: 'def:ndbfindattr', say: 'the attribute, nearest line first', weight: 2 }],
+    },
+    'ndbcat.c': {
+      summary: 'Two databases chained into one search order.',
+      digest: '56737916419f',
+      important: [{ at: 'def:ndbcat', say: 'b searched after a', weight: 1 }],
+    },
+    'ndbconcatenate.c': {
+      summary: 'Two tuple lists joined into one entry.',
+      digest: '932b7611dba6',
+      important: [{ at: 'def:ndbconcatenate', say: 'b after a', weight: 1 }],
+    },
+    'ndbdiscard.c': {
+      summary: 'A tuple removed from an entry and freed, the rings mended.',
+      digest: 'faf6e6a915d8',
+      important: [{ at: 'def:ndbdiscard', say: 'a out of t', weight: 1 }],
+    },
+    'ndbreorder.c': {
+      summary: "An entry reordered so that a given tuple's line comes first, and it first on its line.",
+      digest: 'cfad3a2735fc',
+      important: [{ at: 'def:ndbreorder', say: 'x\'s line to the front', weight: 1 }],
+    },
+    'ndbsubstitute.c': {
+      summary: 'A tuple replaced in an entry by a list of others.',
+      digest: 'bcf412076e57',
+      important: [{ at: 'def:ndbsubstitute', say: 'a replaced by b in t', weight: 1 }],
+    },
+  },
+  skeletons: [
+    skeletons.parts('libndb: open, search, parse, answer', [
+      ['ndbopen.c', 'the database: its files chained'],
+      ['ndbhash.c', 'the search: hash files or a scan'],
+      ['ndbcache.c', 'recent answers remembered'],
+      ['ndbparse.c', 'an entry read into tuples'],
+      ['ndbaux.c', 'a line into tuples'],
+      ['ndbgetval.c', 'the common question: attr=val -> rattr'],
+      ['ndbipinfo.c', 'a host\'s attributes, inherited from subnets'],
+      ['dnsquery.c', 'DNS, through /net/dns'],
+    ], [
+      ['ndbopen.c', 'ndbhash.c', 'database= searched'],
+      ['ndbhash.c', 'ndbcache.c', 'asked first'],
+      ['ndbhash.c', 'ndbparse.c', 'an entry at an offset'],
+      ['ndbparse.c', 'ndbaux.c', 'each line'],
+      ['ndbgetval.c', 'ndbhash.c', 'searches'],
+      ['ndbipinfo.c', 'ndbgetval.c', 'the host\'s ip'],
+      ['ndbipinfo.c', 'ndbhash.c', 'each subnet'],
+    ]),
+    skeletons.chain('ndbopen: a chain of files', [
+      ['ndbopen.c:def:ndbopen', 'the first file, $NDBFILE or /lib/ndb/local', ''],
+      ['ndbopen.c:def:doopen', 'one file opened', 'a name'],
+      ['ndbopen.c:def:ndbreopen', 'opened, stat kept to see changes', 'an Ndb'],
+      ['ndbhash.c:def:ndbsearch', 'database=: the other files named', 'the first file'],
+      ['ndbopen.c:def:ndbclose', 'all closed', 'at the end'],
+    ]),
+    skeletons.chain('ndbsearch: attr=val found', [
+      ['ndbhash.c:def:ndbsearch', 'the first match', ''],
+      ['ndbcache.c:def:_ndbcachesearch', 'the cache asked', 'attr, val'],
+      ['ndbhash.c:def:hfopen', "the attribute's hash file, if fresh", 'a miss'],
+      ['ndbhash.c:def:ndbhash', 'the value hashed to a slot', 'the table size'],
+      ['ndbhash.c:def:ndbsnext', 'entries of the chain parsed and matched', 'an offset'],
+      ['ndbhash.c:def:match', 'the tuple attr=val in it', 'each entry'],
+    ]),
+    skeletons.chain('ndbipinfo: attributes inherited from networks', [
+      ['ndbipinfo.c:def:ndbipinfo', 'the host, then its networks', ''],
+      ['ndbipinfo.c:def:mkfilter', 'the attributes wanted', 'alist'],
+      ['ndbgetval.c:def:ndbgetvalue', "the host's entry and its ip", 'attr=val'],
+      ['ndbipinfo.c:def:filter', 'what is wanted kept', 'the entry'],
+      ['ndbipinfo.c:def:subnet', 'a larger network each round', 'a bit off the mask'],
+      ['ndbipinfo.c:def:filtercomplete', 'all found: done', 'after each'],
+    ]),
+    skeletons.chain('dnsquery: DNS as a file', [
+      ['dnsquery.c:def:dnsquery', '/net/dns opened, or /srv/dns mounted', ''],
+      ['dnsquery.c:def:mkptrname', 'a reverse lookup\'s name', 'type ptr'],
+      ['dnsquery.c:def:doquery', 'written "name type", answers read', 'the fd'],
+      ['ndbaux.c:def:_ndbparseline', 'each answer line to tuples', 'a line read'],
+    ]),
+  ],
+}

@@ -1,0 +1,125 @@
+// kernel/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel.nw (the Raspberry Pi port), Kernel_x86.nw (the PC),
+// Kernel_extra.nw; the parts from its "Code organization" table, the paths
+// from its "Software architecture" (the boot) and the chapters Interrupts,
+// Scheduling, Virtual Memory. The kernel is reactive: dormant until a
+// system call, an interrupt, a timer tick; each path below is one of those.
+local skeletons = import '../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The Plan 9 kernel (Raspberry Pi and PC): processes, memory, files and devices, all reached as files, by 9P.',
+  files: {
+    'codegraph.h': {
+      digest: '4e8ac8fb4fe0',
+      summary: "Stand-ins for codegraph and syncweb's indexer only: KERNDATE, initcode[] (really generated from user/preboot/).",
+      important: [
+        { at: 'def:initcode', say: 'the real bytes come from init/user/preboot/', weight: 2 },
+      ],
+    },
+  },
+  dirs: {
+    conf: { summary: 'The build configurations (pi, pi2, qemu): the devices linked in, the tables generated (devtab, systab) by rc scripts.' },
+    docs: { summary: 'Papers the book draws on: the fossil file server, sleep and wakeup.' },
+  },
+  skeletons: [
+    skeletons.parts("The kernel's subsystems (Kernel.nw, Code organization)", [
+      ['core/', 'dat.h, fns.h, errors, Conf, Cpu: what every file includes'],
+      ['lib/', 'libc, linked into the kernel'],
+      ['concurrency/', 'locks: spin locks, qlocks, interrupts off'],
+      ['memory/', 'allocators, pages, segments, faults, the MMU'],
+      ['processes/', 'Proc, the scheduler, rfork, exec, notes'],
+      ['interrupts/', 'traps and IRQs: the kernel entered'],
+      ['syscalls/', 'the system call table'],
+      ['time/', 'the clock tick, timers, alarms'],
+      ['init/', 'the boot, the first process'],
+      ['files/', 'channels, namespaces, the file system calls'],
+      ['devices/', "the #-devices: #p, #e, #s, the screen, the disks"],
+      ['console/', '#c: the keyboard, print, /dev/cons'],
+      ['filesystems/', 'file servers reached by 9P'],
+      ['buses/', 'UART, USB, I2C, SPI'],
+      ['network/', '#I: IP, TCP, Ethernet (the Network book)'],
+      ['arch/', 'ARM and PC specifics'],
+      ['security/', 'authentication stubs'],
+      ['misc/', 'random, parsing control messages'],
+    ], [
+      ['interrupts/', 'syscalls/', 'a SWI: systab'],
+      ['syscalls/', 'files/', 'open, read, mount...'],
+      ['syscalls/', 'processes/', 'rfork, exec, exits...'],
+      ['files/', 'devices/', 'through devtab'],
+      ['files/', 'console/', 'through devtab'],
+      ['files/', 'network/', 'through devtab'],
+      ['interrupts/', 'memory/', 'page faults'],
+      ['interrupts/', 'time/', 'the clock interrupt'],
+      ['time/', 'processes/', 'a tick: maybe preempt'],
+      ['processes/', 'memory/', 'segments of a process'],
+      ['processes/', 'concurrency/', 'sleep and wakeup, locks'],
+      ['init/', 'processes/', 'the first process, schedinit'],
+      ['core/', 'lib/', 'includes'],
+    ]),
+    skeletons.chain('The boot (ARM): firmware to the first process', [
+      ['init/arm/start.s:comment:"function [[_start]](arm)"', 'loaded at physical 0x8000: SVC mode, a stack', ''],
+      ['init/arm/startv6.s:comment:"function [[armstart]](raspberry pi1)(arm)"', 'page tables, MMU on (Pi 2: startv7.s)', 'BL armstart'],
+      ['memory/arm/mmu.c:def:mmuinit', 'the first page tables: KZERO mapped', 'BL mmuinit'],
+      ['init/arm/main.c:def:main', 'Conf, allocators, traps, clock, devices', 'BL main'],
+      ['init/arm/main.c:def:arch__userinit', 'the first process: initcode in its one page', 'calls'],
+      ['processes/proc.c:def:schedinit', 'the scheduler: the only ready process chosen', 'calls'],
+      ['init/arm/main.c:def:init0', "in it: root, dot, env; then touser", 'scheduled'],
+      ['init/user/preboot/initcode.c:def:startboot', 'user mode at last: exec /boot/boot', 'touser'],
+    ]),
+    skeletons.chain('A system call (ARM), in and out', [
+      ['interrupts/arm/lexception.s:comment:"function [[_vsvc]](arm)"', 'SWI: user registers saved in a Ureg', ''],
+      ['syscalls/arm/syscall.c:def:arch__syscall', 'number from r0, arguments validated', 'BL'],
+      ['syscalls/systab.c:def:systab', 'the calls by number', 'systab[r0]'],
+      ['processes/sysproc.c:def:sysrfork', 'e.g. rfork: a new Proc', 'RFORK'],
+      ['processes/proc.c:def:proc_error', 'or an error: longjmp to waserror, -1', 'error()'],
+      ['syscalls/arm/syscall.c:def:arch__notify', 'notes delivered on the way out', 'returns'],
+    ]),
+    skeletons.chain('A clock tick: timers, then maybe another process', [
+      ['interrupts/arm/lexception.s:def:_vswitch', 'IRQ: to SVC mode, a Ureg', ''],
+      ['interrupts/arm/trap.c:def:irq', "the IRQ's handlers", 'arch__trap'],
+      ['time/arm/clock.c:def:clockintr', 'the system timer fired', 'Vctl'],
+      ['time/portclock.c:def:timerintr', 'expired timers run', 'calls'],
+      ['time/portclock.c:def:hzclock', 'HZ times a second: accounting, alarms', 'the HZ timer'],
+      ['processes/proc.c:def:hzsched', 'quantum used up? delaysched set', 'calls'],
+      ['processes/proc.c:def:proc_sched', 'from arch__trap: the switch', 'delaysched'],
+      ['processes/proc.c:comment:"function [[runproc]]"', 'the next ready process, by priority', 'calls'],
+    ]),
+    skeletons.chain('A page fault (ARM): demand paging', [
+      ['interrupts/arm/lexception.s:def:_vswitch', 'a data abort', ''],
+      ['interrupts/arm/trap.c:def:faultarm', 'the address and access, from the coprocessor', 'arch__trap'],
+      ['memory/fault.c:def:fault', 'the segment holding the address', 'calls'],
+      ['memory/fault.c:def:fixfault', 'a page found, zeroed, read, or copied on write', 'calls'],
+      ['memory/page.c:def:newpage', 'a free page', 'calls'],
+      ['memory/arm/mmu.c:def:arch_putmmu', 'mapped in the page table', 'calls'],
+    ]),
+    skeletons.chain('Sleep and wakeup: a process waits for a device', [
+      ['processes/proc.c:def:proc_sleep', 'the condition false: the process waits on a Rendez', ''],
+      ['processes/proc.c:def:proc_sched', 'another process runs', 'calls'],
+      ['interrupts/arm/trap.c:def:irq', "later, the device's interrupt", 'meanwhile'],
+      ['processes/proc.c:def:proc_wakeup', "the handler wakes the Rendez's process", 'a handler'],
+      ['processes/proc.c:def:proc_ready', 'back on a run queue', 'calls'],
+    ]),
+  ],
+  tours: [
+    {
+      name: 'The kernel in ten stops (Kernel.nw)',
+      stops: [
+        { at: 'core/arm/dat.h:def:up', say: 'up, the current process, lives in a register: every function sees it.' },
+        { at: 'processes/portdat_processes.h:type:Proc', say: 'The process: its state, segments, namespace, file descriptors, error labels.' },
+        { at: 'init/arm/main.c:def:main', say: 'The boot: each subsystem initialized in order, then the first process.' },
+        { at: 'interrupts/arm/lexception.s:def:_vswitch', say: 'Every trap enters here: the kernel is reactive, dormant until an event.' },
+        { at: 'syscalls/arm/syscall.c:def:arch__syscall', say: 'A system call: the number indexes systab; errors come back by longjmp.' },
+        { at: 'processes/proc.c:def:proc_sched', say: 'The scheduler: the current process saved, the next one chosen by priority.' },
+        { at: 'processes/proc.c:def:proc_sleep', say: 'Sleep and wakeup: the one synchronization between processes and interrupts.' },
+        { at: 'memory/fault.c:def:fault', say: 'A page fault: pages come on demand, copied on write.' },
+        { at: 'files/chan.c:def:namec', say: 'A path walked through the namespace: every resource is a file.' },
+        { at: 'files/dev.c:def:devtab', say: 'The devices, each a table of functions: attach, walk, open, read, write.' },
+      ],
+    },
+  ],
+  views: [
+    { name: 'A trap: ARM entry, dispatch, the calls', files: ['interrupts/arm/', 'syscalls/', 'processes/proc.c', 'memory/fault.c'] },
+    { name: 'The boot', files: ['init/', 'core/portfns.c', 'processes/proc.c'] },
+  ],
+}

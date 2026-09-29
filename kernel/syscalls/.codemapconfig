@@ -1,0 +1,95 @@
+// kernel/syscalls/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel.nw, chapter Interrupts (system calls).
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The door from user mode: the table of system calls by number, the trap that calls them, their tracing.",
+  files: {
+    'systab.c': {
+      digest: 'faeab4634d1f',
+      summary: "The system call table: each number of libc's sys.h mapped to its sysxxx() and its name.",
+      capitals: [
+        { at: 'def:systab', say: 'every system call, by number' },
+      ],
+      important: [
+        { at: 'comment:"coupling: debuggers/acid/conf/syscall"', say: 'acid and truss know these numbers too', weight: 1 },
+        { at: 'comment:"[[systab]] process syscalls"', say: 'rfork, exec, await, exits', weight: 2 },
+        { at: 'comment:"[[systab]] file syscalls"', say: 'the files: most of the table', weight: 2 },
+        { at: 'def:nsyscall', say: 'checked before indexing: a bad number is Ebadarg', weight: 2 },
+        { at: 'def:sysctab', say: "the calls' names: ps's state, the tracer's output", weight: 1 },
+      ],
+      related: ['../../lib_core/libc/9syscall/sys.h', 'arm/syscall.c'],
+    },
+    'systab.h': {
+      digest: '333a4c2d33c4',
+      summary: 'Syscall, the type of a system call (its arguments as words), and the tables declared.',
+      important: [
+        { at: 'comment:"typedef Syscall"', say: 'long f(ulong *args): arguments still unchecked', weight: 2 },
+      ],
+    },
+    'syscallfmt.c': {
+      digest: '2aa59e918f00',
+      summary: 'System call tracing (ratrace, /proc/n/syscall): a call and its result printed, user strings read safely.',
+      important: [
+        { at: 'def:syscallfmt', say: 'the call, before: its name and arguments', weight: 3 },
+        { at: 'def:sysretfmt', say: 'the call, after: its result and time', weight: 2 },
+        { at: 'def:fmtuserstring', say: 'a user string, validated before it is read', weight: 2 },
+        { at: 'def:fmtrwdata', say: "a read's or write's data, shown bounded", weight: 1 },
+      ],
+    },
+    'portfns_syscalls.h': {
+      digest: 'd35412c5b0b4',
+      summary: "The tracing functions, for the arch-specific syscall code.",
+    },
+  },
+  skeletons: [
+    skeletons.parts('A system call: the table between the trap and the calls', [
+      ['arm/', 'the trap: number and arguments taken from the Ureg'],
+      ['386/', 'the same entered by int 64'],
+      ['systab.c', 'the calls by number'],
+      ['syscallfmt.c', 'the calls traced'],
+      ['../processes/sysproc.c', 'process and memory calls: rfork, exec...'],
+      ['../files/sysfile.c', 'file calls: open, read, mount...'],
+      ['user/', 'a call made by hand'],
+    ], [
+      ['arm/', 'systab.c', 'systab[scallnr](args)'],
+      ['386/', 'systab.c', 'systab[scallnr](args)'],
+      ['arm/', 'syscallfmt.c', 'when traced'],
+      ['systab.c', '../processes/sysproc.c', 'sysrfork, sysexec...'],
+      ['systab.c', '../files/sysfile.c', 'sysopen, syspread...'],
+      ['user/', 'arm/', 'a SWI'],
+    ]),
+    {
+      name: 'The call traced (syscallfmt.c)',
+      bones: [
+        { at: 'syscallfmt.c:def:syscallfmt', role: 'before the call' },
+        { at: 'syscallfmt.c:def:fmtuserstring', role: 'a user string, safely' },
+        { at: 'syscallfmt.c:def:fmtrwdata', role: 'data read or written' },
+        { at: 'syscallfmt.c:def:sysretfmt', role: 'after the call' },
+        { at: 'arm/syscall.c:def:arch__syscall', role: 'calls both' },
+      ],
+      joints: [
+        { from: 'arm/syscall.c:def:arch__syscall', to: 'syscallfmt.c:def:syscallfmt', say: 'up->syscalltrace' },
+        { from: 'syscallfmt.c:def:syscallfmt', to: 'syscallfmt.c:def:fmtuserstring', say: 'path arguments' },
+        { from: 'arm/syscall.c:def:arch__syscall', to: 'syscallfmt.c:def:sysretfmt', say: 'the result' },
+        { from: 'syscallfmt.c:def:sysretfmt', to: 'syscallfmt.c:def:fmtrwdata', say: 'a read returned' },
+      ],
+    },
+    {
+      name: 'The table (systab.c)',
+      bones: [
+        { at: 'systab.h:comment:"typedef Syscall"', role: 'a call: words in, a long out' },
+        { at: 'systab.c:def:systab', role: 'number to function' },
+        { at: 'systab.c:def:nsyscall', role: 'its bound' },
+        { at: 'systab.c:def:sysctab', role: 'number to name' },
+        { at: '../processes/sysproc.c:def:sysrfork', role: 'one of them' },
+      ],
+      joints: [
+        { from: 'systab.h:comment:"typedef Syscall"', to: 'systab.c:def:systab', say: 'the entries' },
+        { from: 'systab.c:def:nsyscall', to: 'systab.c:def:systab', say: 'bounds' },
+        { from: 'systab.c:def:systab', to: '../processes/sysproc.c:def:sysrfork', say: '[RFORK]' },
+      ],
+    },
+  ],
+}

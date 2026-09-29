@@ -1,0 +1,103 @@
+// kernel/memory/arm/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section
+// 12). The book: kernel/Kernel.nw, "Memory overview (ARM)" and Virtual Memory.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The Raspberry Pi's memory: the address map, the ARM two-level page tables, the caches and the TLB.",
+  files: {
+    'mem.h': {
+      summary: 'The address map and sizes, for C and assembly: KZERO at 2GB, pages of 4KB, the user stack, the vectors.',
+      digest: 'd7a36223ef1f',
+      capitals: [
+        { at: 'def:KZERO', say: 'the kernel above 2GB: virtual = physical + KZERO' },
+        { at: 'def:BY2PG', say: 'a page: 4KB' },
+        { at: 'def:UTZERO', say: 'user text starts one page above 0' },
+      ],
+      important: [
+        { at: 'def:KTZERO', say: 'the kernel linked here, loaded at physical 0x8000', weight: 3 },
+        { at: 'def:CPU', say: 'R10 holds cpu, R9 up: registers reserved', weight: 2 },
+        { at: 'def:CPUADDR', say: 'the first Cpu below the kernel', weight: 1 },
+        { at: 'def:USTKTOP', say: 'the user stack below 512MB', weight: 2 },
+        { at: 'def:L1', say: 'the level-1 page table', weight: 1 },
+        { at: 'def:FRAMEBUFFER', say: "the GPU's framebuffer, mapped at 3GB", weight: 1 },
+        { at: 'def:PPN', say: 'a page number: the low bits cleared', weight: 1 },
+      ],
+    },
+    'dat_memory.h': {
+      summary: "The MMU's part of a Proc: its level-2 page table pages, and a cache of spare ones.",
+      digest: '9fd7019fed31',
+      important: [{ at: 'type:Arch_Proc', say: 'l2 tables per process', weight: 2 }],
+    },
+    'mmu.c': {
+      summary: "The ARM MMU: RAM mapped at KZERO by 1MB sections, user pages by level-2 tables, switched per process.",
+      digest: '26ede738c9cb',
+      capitals: [{ at: 'def:arch_putmmu', say: 'a fault fixed: its entry written' }],
+      important: [
+        { at: 'def:mmuinit', say: 'the MMU still off: all RAM mapped at KZERO', weight: 3 },
+        { at: 'def:mmuinit1', say: 'the identity map at 0 undone', weight: 1 },
+        { at: 'def:arch_mmuswitch', say: "a process's l2 tables into the l1 on a switch", weight: 3 },
+        { at: 'comment:"This is plausible, but wrong"', say: 'why the switch is always done', weight: 1 },
+        { at: 'def:arch_mmurelease', say: "an exiting process's tables freed", weight: 1 },
+        { at: 'def:mmukmap', say: 'a device mapped by section', weight: 1 },
+        { at: 'def:L1X', say: 'the level-1 index: the top 12 bits', weight: 1 },
+      ],
+      links: [{ from: 'def:arch_flushmmu', to: 'def:arch_mmuswitch' }],
+    },
+    'mmuinvalidate.s': {
+      summary: 'The TLB invalidated, whole or for one address.',
+      digest: '49481ec9fd76',
+    },
+    'cache_raspi1.s': {
+      summary: "The ARM11's (Pi 1) caches written back and invalidated, whole or over a range.",
+      digest: '57d5e96fa492',
+    },
+    'cache_raspi2.s': {
+      summary: "The Cortex-A7's (Pi 2) caches by address or by set and way, level 1 and 2.",
+      digest: 'ce5e0e596590',
+      important: [
+        { at: 'comment:"cache operations."', say: 'by address, all levels at once in ARMv7', weight: 2 },
+        { at: 'comment:"l2 cache operations"', say: 'the unified L2', weight: 1 },
+        { at: 'comment:"callers are assumed to be the above l1 and l2 ops"', say: 'every set and way walked', weight: 2 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('The ARM memory: map, tables, caches', [
+      ['mem.h', 'the address map'],
+      ['dat_memory.h', "a process's page tables"],
+      ['mmu.c', 'the page tables written and switched'],
+      ['mmuinvalidate.s', 'the TLB flushed'],
+      ['cache_raspi1.s', 'the caches, Pi 1'],
+      ['cache_raspi2.s', 'the caches, Pi 2'],
+    ], [
+      ['mem.h', 'mmu.c', 'KZERO, sizes'],
+      ['dat_memory.h', 'mmu.c', 'l2 pages'],
+      ['mmu.c', 'mmuinvalidate.s', 'after a change'],
+      ['mmu.c', 'cache_raspi2.s', 'written back on a switch'],
+    ]),
+    skeletons.chain('The ARM MMU: boot, switch, fault', [
+      ['mmu.c:def:mmuinit', 'l1 built, MMU off (from start.s)', ''],
+      ['mmu.c:def:mmuinit1', 'the low identity map dropped', 'MMU on'],
+      ['mmu.c:def:arch_mmuswitch', "a process's l2 tables in the l1", 'a switch'],
+      ['mmu.c:def:arch_putmmu', 'an entry added after a fault', 'a fault'],
+      ['mmu.c:def:arch_mmurelease', 'its tables freed at exit', 'exit'],
+      ['mmuinvalidate.s', 'stale translations dropped', 'TLB'],
+    ]),
+    {
+      name: 'The Pi 2 caches: by address, by set and way',
+      bones: [
+        { at: 'cache_raspi2.s:comment:"cache operations."', role: 'by address: a range written back or invalidated' },
+        { at: 'cache_raspi2.s:def:_dwbse', role: 'the loop over cache lines' },
+        { at: 'cache_raspi2.s:def:_wait', role: 'barriers, interrupts restored' },
+        { at: 'cache_raspi2.s:comment:"l2 cache operations"', role: 'the L2 whole' },
+        { at: 'cache_raspi2.s:def:outer', role: 'over the sets and ways, a function each' },
+      ],
+      joints: [
+        { from: 'cache_raspi2.s:comment:"cache operations."', to: 'cache_raspi2.s:def:_dwbse', say: 'each line' },
+        { from: 'cache_raspi2.s:def:_dwbse', to: 'cache_raspi2.s:def:_wait', say: 'done' },
+        { from: 'cache_raspi2.s:comment:"l2 cache operations"', to: 'cache_raspi2.s:def:outer', say: 'level 2' },
+      ],
+    },
+  ],
+}

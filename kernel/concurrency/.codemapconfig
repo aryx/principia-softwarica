@@ -1,0 +1,120 @@
+// kernel/concurrency/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The kernel's locks: spin locks, interrupt-safe ilocks, sleeping qlocks and rwlocks, reference counts.",
+  files: {
+    'portdat_concurrency.h': {
+      summary: 'The lock types: Lock (spin), ILock, QLock and RWlock (queues of sleepers), Ref, Rendez, Sema.',
+      digest: '0fe57335253b',
+      capitals: [
+        { at: 'type:Lock', say: 'the spin lock: a key tested and set' },
+        { at: 'type:Rendez', say: 'where a process sleeps until wakeup' },
+      ],
+      important: [
+        { at: 'type:ILock', say: 'a Lock taken with interrupts off', weight: 2 },
+        { at: 'type:KQLock', say: 'a lock that sleeps: a queue of Procs', weight: 3 },
+        { at: 'type:RWlock', say: 'many readers or one writer', weight: 1 },
+        { at: 'type:Ref', say: 'a count under a lock', weight: 1 },
+        { at: 'type:Sema', say: 'user semaphores (semacquire)', weight: 1 },
+      ],
+    },
+    'portfns_concurrency.h': {
+      summary: "The locks' functions, and the arch's primitives: arch_tas, the spl* interrupt levels.",
+      digest: '5070b4e0b5cf',
+      important: [
+        { at: 'def:arch_splhi', say: 'interrupts off: the uniprocessor lock', weight: 3 },
+        { at: 'def:arch_tas', say: 'the one atomic instruction all locks rest on', weight: 3 },
+        { at: 'def:qlock', say: 'the sleeping lock', weight: 1 },
+      ],
+    },
+    'taslock.c': {
+      summary: 'Spin locks on test-and-set: lock spins (yielding after a while), ilock also turns interrupts off.',
+      digest: 'bda218a1df20',
+      capitals: [
+        { at: 'def:lock', say: 'spin on arch_tas' },
+        { at: 'def:ilock', say: 'a spin lock safe against interrupts' },
+      ],
+      important: [
+        { at: 'comment:"prevent being scheded"', say: 'nlocks: no preemption while holding a lock', weight: 3 },
+        { at: 'comment:"The lock was already held, need to spin"', say: 'spin, and let others run if it lasts', weight: 2 },
+        { at: 'def:unlock', say: 'key back to 0; a delayed sched runs now', weight: 2 },
+        { at: 'def:iunlock', say: 'interrupts restored to what ilock found', weight: 2 },
+        { at: 'def:canlock', say: 'try once, never spin', weight: 1 },
+      ],
+      links: [
+        { from: 'def:lock', to: 'def:lockloop' },
+      ],
+      related: ['arm/tas_raspi2.s', 'arm/spl.s'],
+    },
+    'qlock.c': {
+      summary: 'Sleeping locks: qlock queues the process and calls sched; rwlocks for many readers or one writer.',
+      digest: 'c416adaae036',
+      capitals: [
+        { at: 'def:qlock', say: 'held: queue up and sleep' },
+      ],
+      important: [
+        { at: 'comment:"add_queue(q, up)"', say: 'the process joins the lock queue', weight: 2 },
+        { at: 'comment:"switch to another process!"', say: 'sleeps in sched until qunlock readies it', weight: 3 },
+        { at: 'def:qunlock', say: 'the lock handed to the first waiter', weight: 3 },
+        { at: 'def:rlock', say: 'readers share unless a writer waits', weight: 1 },
+        { at: 'def:wlock', say: 'a writer waits for the readers to leave', weight: 1 },
+      ],
+    },
+    'ref.c': {
+      summary: 'Reference counts: incref and decref under the Ref lock.',
+      digest: '24dd80f15c62',
+    },
+  },
+  skeletons: [
+    skeletons.parts('The locks, one on another', [
+      ['portdat_concurrency.h', 'the lock types'],
+      ['arm/', 'the atomic instruction and interrupt levels (ARM)'],
+      ['386/', 'the same for x86'],
+      ['taslock.c', 'spin locks: lock and ilock'],
+      ['qlock.c', 'sleeping locks: qlock, rwlocks'],
+      ['ref.c', 'reference counts'],
+      ['../processes/proc.c', 'sched: where a qlock sleeper goes'],
+    ], [
+      ['taslock.c', 'arm/', 'arch_tas, arch_splhi'],
+      ['taslock.c', '386/', 'arch_tas, arch_splhi'],
+      ['qlock.c', 'taslock.c', 'its queue under a spin lock'],
+      ['ref.c', 'taslock.c', 'the count under a lock'],
+      ['qlock.c', '../processes/proc.c', 'sched, ready'],
+    ]),
+    {
+      name: 'A spin lock: taken, spun, released',
+      bones: [
+        { at: 'taslock.c:def:lock', role: 'try arch_tas; nlocks up' },
+        { at: 'taslock.c:def:lockloop', role: 'too long: the lock reported' },
+        { at: 'taslock.c:def:ilock', role: 'the same, interrupts off' },
+        { at: 'taslock.c:def:unlock', role: 'released; delayed sched' },
+        { at: 'taslock.c:def:iunlock', role: 'released, interrupts restored' },
+      ],
+      joints: [
+        { from: 'taslock.c:def:lock', to: 'taslock.c:def:lockloop', say: 'held too long' },
+        { from: 'taslock.c:def:lock', to: 'taslock.c:def:unlock', say: 'the critical section' },
+        { from: 'taslock.c:def:ilock', to: 'taslock.c:def:iunlock', say: 'the critical section' },
+      ],
+    },
+    {
+      name: 'A qlock: queue, sleep, hand over',
+      bones: [
+        { at: 'qlock.c:def:qlock', role: 'free: take it; else queue' },
+        { at: 'qlock.c:def:qunlock', role: 'the first waiter readied' },
+        { at: 'qlock.c:def:rlock', role: 'a reader' },
+        { at: 'qlock.c:def:wlock', role: 'a writer' },
+        { at: 'qlock.c:def:runlock', role: 'the last reader wakes a writer' },
+        { at: 'qlock.c:def:wunlock', role: 'readers or the next writer woken' },
+        { at: '../processes/proc.c:def:proc_sched', role: 'the sleeper gives up the CPU' },
+      ],
+      joints: [
+        { from: 'qlock.c:def:qlock', to: '../processes/proc.c:def:proc_sched', say: 'Queueing' },
+        { from: 'qlock.c:def:qunlock', to: 'qlock.c:def:qlock', say: 'ready(p): it resumes owning the lock' },
+        { from: 'qlock.c:def:runlock', to: 'qlock.c:def:wlock', say: 'the writer readied' },
+        { from: 'qlock.c:def:wunlock', to: 'qlock.c:def:rlock', say: 'readers readied' },
+      ],
+    },
+  ],
+}

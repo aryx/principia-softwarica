@@ -1,0 +1,96 @@
+// kernel/processes/arm/: what the code map says of it
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "The ARM side of processes: the context switch, the first jump to user mode, a kproc's start, the VFP.",
+  files: {
+    'switch.s': {
+      summary: 'setlabel and gotolabel: sp and pc saved and restored, the whole context switch (and waserror).',
+      digest: '3aaea6b12000',
+      capitals: [
+        { at: 'comment:"function [[arch_gotolabel]](arm)"', say: 'the switch: returns 1 in another stack' },
+      ],
+      important: [
+        { at: 'comment:"function [[arch_setlabel]](arm)"', say: 'returns 0 now, 1 when resumed', weight: 3 },
+      ],
+    },
+    'lproc.s': {
+      summary: 'The first jump to user mode (a faked return from interrupt) and the return of a forked child.',
+      digest: '9b057d8c8350',
+      important: [
+        { at: 'comment:"function [[arch_touser]](arm)"', say: 'the first process enters user mode here', weight: 3 },
+        { at: 'comment:"function [[arch__forkret]](arm)"', say: "a child resumes in the parent's saved Ureg", weight: 2 },
+      ],
+    },
+    'arch.c': {
+      summary: "ARM process hooks: user pc and registers from the Ureg, alignment, a kproc's first stack, kernel exit accounting.",
+      digest: '46efdfe3c002',
+      important: [
+        { at: 'def:arch_kprocchild', say: "a kproc starts at linkproc on its kstack", weight: 3 },
+        { at: 'def:linkproc', say: 'every kproc body: its function, then pexit', weight: 2 },
+        { at: 'def:arch__kexit', say: 'cycles accounted in the user Tos', weight: 1 },
+        { at: 'def:arch_setregisters', say: 'the registers a debugger may change', weight: 1 },
+        { at: 'def:arch_validalign', say: 'semaphore addresses aligned', weight: 1 },
+      ],
+    },
+    'vfp3.c': {
+      summary: 'The VFP floating-point unit: enabled lazily on first use, saved and restored with the process.',
+      digest: '0f934276c342',
+      important: [
+        { at: 'def:fpuemu', say: 'an undefined instruction: turn the FPU on', weight: 3 },
+        { at: 'def:mathemu', say: 'the lazy FPU: init or restore, then retry', weight: 3 },
+        { at: 'def:arch_procsave', say: 'the FP state saved at a switch', weight: 2 },
+        { at: 'def:arch_procrestore', say: 'nothing restored eagerly: FPU off', weight: 1 },
+        { at: 'def:fpusysrfork', say: 'FP state and fork', weight: 1 },
+      ],
+    },
+    'dat_processes.h': {
+      summary: "ARM's a.out magic and the saved FP state (Arch_FPsave).",
+      digest: 'a644e4400904',
+    },
+  },
+  skeletons: [
+    skeletons.parts('The ARM context: switch, user entry, FPU', [
+      ['switch.s', 'setlabel/gotolabel: the switch'],
+      ['lproc.s', 'into user mode, the forked child'],
+      ['arch.c', 'registers, kprocs'],
+      ['vfp3.c', 'the FPU, lazily'],
+      ['../proc.c', 'the scheduler using them'],
+    ], [
+      ['../proc.c', 'switch.s', 'sched: setlabel, gotolabel'],
+      ['../proc.c', 'arch.c', 'arch_kprocchild'],
+      ['../proc.c', 'vfp3.c', 'arch_procsave, arch_procrestore'],
+      ['arch.c', 'lproc.s', 'forkret'],
+    ]),
+    {
+      name: 'arch.c: a process, as the ARM sees it',
+      bones: [
+        { at: 'arch.c:def:arch_userpc', role: 'the user pc, from the Ureg' },
+        { at: 'arch.c:def:arch_setregisters', role: 'registers a debugger writes' },
+        { at: 'arch.c:def:arch_kprocchild', role: 'a kproc: stack and pc' },
+        { at: 'arch.c:def:linkproc', role: 'its body' },
+        { at: 'arch.c:def:arch__kexit', role: 'leaving the kernel' },
+      ],
+      joints: [
+        { from: 'arch.c:def:arch_kprocchild', to: 'arch.c:def:linkproc', say: 'sched.pc' },
+      ],
+    },
+    {
+      name: 'vfp3.c: the lazy FPU',
+      bones: [
+        { at: 'vfp3.c:def:fpuemu', role: 'a VFP instruction trapped' },
+        { at: 'vfp3.c:def:mathemu', role: 'the FPU state made ready' },
+        { at: 'vfp3.c:def:fpinit', role: 'first use: fresh state' },
+        { at: 'vfp3.c:def:fprestore', role: 'later: state restored' },
+        { at: 'vfp3.c:def:arch_procsave', role: 'a switch: state saved, FPU off' },
+        { at: 'vfp3.c:def:fpsave', role: 'the registers saved' },
+      ],
+      joints: [
+        { from: 'vfp3.c:def:fpuemu', to: 'vfp3.c:def:mathemu', say: 'not yet enabled' },
+        { from: 'vfp3.c:def:mathemu', to: 'vfp3.c:def:fpinit', say: 'FPinit' },
+        { from: 'vfp3.c:def:mathemu', to: 'vfp3.c:def:fprestore', say: 'FPinactive' },
+        { from: 'vfp3.c:def:arch_procsave', to: 'vfp3.c:def:fpsave', say: 'FPactive' },
+      ],
+    },
+  ],
+}

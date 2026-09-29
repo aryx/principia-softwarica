@@ -1,0 +1,191 @@
+// typesetting/eqn/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// eqn (Kernighan and Cherry, 1975): a troff preprocessor; its grammar is
+// eqn.y (yacc), not a C source here, whose actions call the box builders
+// below. eqnchar (troff macros for extra characters) sits beside them.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'eqn: mathematics typed as words (x sup 2 over y) turned into troff strings of boxes, sizes and motions.',
+  files: {
+    'main.c': {
+      summary: 'The driver: .EQ/.EN blocks and inline delimiters found, each equation parsed, the result put out as a troff string.',
+      digest: '026128f6ea72',
+      capitals: [{ at: 'def:main', say: 'eqn: options, then each file' }],
+      important: [
+        { at: 'code:"in[0] == \'.\' && in[1] == \'E\' && in[2] == \'Q\'"', say: 'a displayed equation: .EQ to .EN parsed', weight: 3 },
+        { at: 'def:inlineeq', say: 'an equation between delimiters, inside a line', weight: 2 },
+        { at: 'def:putout', say: 'the answer: string register eqnreg, with its extra space', weight: 3 },
+        { at: 'def:salloc', say: 'string registers (named by numbers) allocated', weight: 2 },
+        { at: 'def:EM', say: 'ems at a point size: the unit of every box', weight: 1 },
+      ],
+    },
+    'e.h': {
+      summary: "eqn's globals: each box's height and baseline (eht, ebase) indexed by its string register, the tables, the input stack.",
+      digest: '270a2631fe59',
+      capitals: [{ at: 'def:yyval', say: "a box: a register number, yacc's value" }],
+      important: [
+        { at: 'def:eht', say: 'the height of box n', weight: 3 },
+        { at: 'def:ebase', say: 'the depth below the baseline of box n', weight: 2 },
+        { at: 'type:tbl', say: 'the hashed tables of keywords and defines', weight: 2 },
+        { at: 'type:Infile', say: 'the files being read', weight: 1 },
+      ],
+    },
+    'glob.c': { summary: "The globals e.h declares: sizes, fonts, the delimiters, the boxes' heights.", digest: 'c91f00bb54d1' },
+    'lex.c': {
+      summary: "The lexer: words looked up as keywords or defines (expanded by pushing their text back), define, include, delim.",
+      digest: '05978e0daa22',
+      important: [
+        { at: 'def:yylex', say: 'a token: a keyword, a define expanded, or text', weight: 3 },
+        { at: 'def:getstr', say: 'a word, or a quoted string', weight: 1 },
+        { at: 'def:define', say: 'define x "..." : the body saved', weight: 2 },
+        { at: 'def:delim', say: 'delim $$: the inline delimiters set', weight: 1 },
+      ],
+    },
+    'input.c': {
+      summary: 'The input as a stack of sources (files, defines with arguments $1.., strings pushed back) and error messages with context.',
+      digest: 'ea426d69884a',
+      important: [
+        { at: 'def:pushsrc', say: 'a file, a macro or a string on the stack', weight: 2 },
+        { at: 'def:input', say: 'the next character, from the stack top', weight: 3 },
+        { at: 'def:dodef', say: 'a define called: its arguments collected', weight: 1 },
+        { at: 'def:error', say: 'the message and the last characters read', weight: 1 },
+      ],
+    },
+    'lookup.c': {
+      summary: "The keyword tables: eqn's words (sup, over, sqrt) and its reserved names (the Greek letters, >=) as troff strings.",
+      digest: '9b019842ab26',
+      important: [
+        { at: 'type:keyword', say: 'a word and its token', weight: 2 },
+        { at: 'type:resword', say: 'alpha -> \\(*a: the troff spelling', weight: 2 },
+        { at: 'def:lookup', say: 'a hashed lookup', weight: 1 },
+        { at: 'def:init_tbl', say: 'the tables filled at start', weight: 1 },
+      ],
+    },
+    'text.c': {
+      summary: "Plain text in an equation: each character classed (digit, letter, operator) and given its font and the spacing between classes.",
+      digest: '24e0a6cc881b',
+      important: [
+        { at: 'def:text', say: 'a word made a box', weight: 3 },
+        { at: 'def:trans', say: 'a character: its class, its font, its troff name', weight: 2 },
+        { at: 'def:shim', say: 'the space between two classes', weight: 2 },
+      ],
+    },
+    'tuning.c': {
+      summary: "The tuning parameters (gaps, shifts, in ems) as named values a document may change with 'set'.",
+      digest: '6d74126b0954',
+      important: [
+        { at: 'type:tune', say: 'a parameter: its name and variable', weight: 2 },
+        { at: 'def:ftune', say: 'set name value: a parameter changed', weight: 2 },
+      ],
+    },
+    'eqnbox.c': { summary: 'Two boxes side by side: the heights and baselines combined.', digest: '5be3c9f4250a' },
+    'over.c': { summary: 'a over b: a fraction, the bar and the two boxes centred.', digest: '5533e56731d6' },
+    'sqrt.c': { summary: 'sqrt: a radical sign sized to its box, the bar over it.', digest: 'cd8fc63d90c3' },
+    'shift.c': { summary: 'sub and sup: a box shifted down or up, both at once.', digest: 'd7324bec6345' },
+    'fromto.c': { summary: 'from and to: limits under and over a sum or integral.', digest: '89ef82e829d4' },
+    'paren.c': { summary: 'left ( and right ): brackets built from pieces to the height of their box.', digest: 'c2988f967b8d' },
+    'pile.c': { summary: 'pile: boxes stacked vertically, aligned left, right or centred.', digest: '2e4919c3d77f' },
+    'matrix.c': { summary: 'matrix: columns of piles side by side.', digest: '459164d826dc' },
+    'diacrit.c': { summary: 'Accents over a box: dot, hat, tilde, bar, under.', digest: 'a3c38eba69ca' },
+    'integral.c': { summary: 'The integral sign, built and sized.', digest: 'faff5fcb88d8' },
+    'funny.c': { summary: 'The big operators: sum, prod, union, inter.', digest: '2986563fa681' },
+    'font.c': { summary: 'roman, italic, bold, fat, gfont: a box in another font.', digest: 'c914baae31f7' },
+    'size.c': { summary: 'size n, gsize: a box at another point size.', digest: 'b4d2f1c0193d' },
+    'mark.c': { summary: 'mark and lineup: equations aligned across lines.', digest: '8852f9532f39' },
+    'move.c': { summary: 'fwd, back, up, down: a box moved by hand.', digest: '7c23962160d9' },
+  },
+  skeletons: [
+    skeletons.cmd('eqn: an equation to troff strings', 'main.c:def:main', [
+      ['main.c:def:getdata', 'lines copied, .EQ blocks and delimiters found', 'each file'],
+      ['main.c:def:yyparse', "eqn.y's parser (yacc): the grammar, its actions build boxes", 'an equation'],
+      ['lex.c:def:yylex', 'tokens: keywords, defines, text', 'tokens'],
+      ['over.c:def:boverb', 'a box builder (over, sqrt, sub, pile...): troff .ds lines', 'a rule reduced'],
+      ['main.c:def:putout', 'the answer: one string register', 'the whole box'],
+    ]),
+    skeletons.parts('eqn: the parts', [
+      ['main.c', 'the driver: finds equations'],
+      ['lex.c', 'tokens, defines'],
+      ['input.c', 'the input stack'],
+      ['lookup.c', 'the keywords and names'],
+      ['text.c', 'text as boxes'],
+      ['over.c', 'the constructs, a file each (over, sqrt, shift...)'],
+      ['e.h', 'the boxes: height and base per register'],
+    ], [
+      ['main.c', 'lex.c', 'parses, via yacc'],
+      ['lex.c', 'input.c', 'reads'],
+      ['lex.c', 'lookup.c', 'looks up'],
+      ['main.c', 'text.c', 'text reduced'],
+      ['main.c', 'over.c', 'constructs reduced'],
+      ['over.c', 'e.h', 'sizes the boxes'],
+    ]),
+    {
+      name: 'The input stack',
+      bones: [
+        { at: 'input.c:def:pushsrc', role: 'a source pushed' },
+        { at: 'input.c:def:input', role: 'a character from the top' },
+        { at: 'input.c:def:popsrc', role: 'an exhausted source dropped' },
+        { at: 'input.c:def:dodef', role: 'a define called with arguments' },
+      ],
+      joints: [
+        { from: 'input.c:def:pushsrc', to: 'input.c:def:input', say: 'the new top' },
+        { from: 'input.c:def:input', to: 'input.c:def:popsrc', say: 'at its end' },
+        { from: 'input.c:def:dodef', to: 'input.c:def:pushsrc', say: 'the body, its $n' },
+      ],
+    },
+    {
+      name: 'A token read',
+      bones: [
+        { at: 'lex.c:def:yylex', role: 'the next token' },
+        { at: 'lex.c:def:getstr', role: 'a word' },
+        { at: 'lookup.c:def:lookup', role: 'keyword? define?' },
+        { at: 'lex.c:def:define', role: 'a define recorded' },
+      ],
+      joints: [
+        { from: 'lex.c:def:yylex', to: 'lex.c:def:getstr', say: 'reads' },
+        { from: 'lex.c:def:getstr', to: 'lookup.c:def:lookup', say: 'the word' },
+        { from: 'lex.c:def:yylex', to: 'lex.c:def:define', say: 'define' },
+      ],
+    },
+    {
+      name: 'The tables',
+      bones: [
+        { at: 'lookup.c:type:keyword', role: 'the words of eqn' },
+        { at: 'lookup.c:type:resword', role: 'names spelled for troff' },
+        { at: 'lookup.c:def:init_tbl', role: 'filled at start' },
+        { at: 'lookup.c:def:install', role: 'an entry added' },
+        { at: 'lookup.c:def:lookup', role: 'an entry found' },
+      ],
+      joints: [
+        { from: 'lookup.c:def:init_tbl', to: 'lookup.c:def:install', say: 'each entry' },
+        { from: 'lookup.c:def:install', to: 'lookup.c:def:lookup', say: 'hashed' },
+      ],
+    },
+    {
+      name: 'Text as a box',
+      bones: [
+        { at: 'text.c:def:text', role: 'a word to a box' },
+        { at: 'text.c:def:trans', role: 'a character: class and font' },
+        { at: 'text.c:def:shim', role: 'space between classes' },
+        { at: 'text.c:def:cadd', role: 'the string built' },
+      ],
+      joints: [
+        { from: 'text.c:def:text', to: 'text.c:def:trans', say: 'each character' },
+        { from: 'text.c:def:trans', to: 'text.c:def:shim', say: 'two classes' },
+        { from: 'text.c:def:trans', to: 'text.c:def:cadd', say: 'troff text' },
+      ],
+    },
+    {
+      name: 'The tuning',
+      bones: [
+        { at: 'tuning.c:type:tune', role: 'a named parameter' },
+        { at: 'tuning.c:def:init_tune', role: 'the table filled' },
+        { at: 'tuning.c:def:ftune', role: 'set: a value changed' },
+      ],
+      joints: [
+        { from: 'tuning.c:def:init_tune', to: 'tuning.c:type:tune', say: 'the defaults' },
+        { from: 'tuning.c:def:ftune', to: 'tuning.c:type:tune', say: 'a new value' },
+      ],
+    },
+  ],
+}

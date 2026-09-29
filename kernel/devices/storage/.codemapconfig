@@ -1,0 +1,130 @@
+// kernel/devices/storage/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The book: Kernel_extra.nw's devices/storage/.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: '#S, /dev/sdXX: disks as files (data, ctl, raw, partitions), over controllers each an SDifc.',
+  dirs: {
+    user: { summary: 'The disk tools (x86): partitioning, formatting, the boot record.' },
+  },
+  files: {
+    'devsd.c': {
+      digest: '0b980f4d2304',
+      summary: 'The storage device (#S): /dev/sdC0/{ctl,raw,data,partitions}, reads and writes cut into blocks for the controller.',
+      capitals: [
+        { at: 'def:sdbio', say: 'a read or write: whole blocks to the controller' },
+      ],
+      important: [
+        { at: 'def:sdgen', say: 'the tree: a directory per unit, a file per partition', weight: 2 },
+        { at: 'def:sdinitpart', say: 'a unit brought online, its partitions', weight: 2 },
+        { at: 'code:"l = unit->dev->ifc->bio(unit, 0, 0, b, nb, bno)"', say: "the controller's own bio", weight: 3 },
+        { at: 'def:sdrio', say: 'raw: a SCSI command passed through', weight: 1 },
+        { at: 'def:sdwrite', say: 'ctl: part and delpart; data; raw', weight: 2 },
+        { at: 'def:sdreset', say: 'controllers found by pnp at boot', weight: 1 },
+      ],
+      related: ['sd.h'],
+    },
+    'sd.h': {
+      digest: 'e32d21bce8f2',
+      summary: 'The storage model: SDev (a controller), SDunit (a disk), SDpart, and SDifc, what a controller implements.',
+      capitals: [
+        { at: 'type:SDifc', say: "a controller's operations: pnp, bio, rio" },
+        { at: 'type:SDunit', say: 'a disk: its geometry, its partitions' },
+      ],
+      important: [
+        { at: 'type:SDev', say: 'a controller and its units', weight: 2 },
+        { at: 'type:SDreq', say: 'a SCSI-like request, for rio', weight: 1 },
+        { at: 'type:SDio', say: 'an SD card host: init, cmd, io', weight: 2 },
+      ],
+    },
+    'sdmmc.c': {
+      digest: '275929f6abe8',
+      summary: 'SD and MMC cards as an SDifc: the card identified and read in blocks, over a host interface (SDio: the Pi\'s emmc).',
+      capitals: [
+        { at: 'code:"SDifc sdmmcifc = {"', say: 'the SD card as a controller' },
+      ],
+      important: [
+        { at: 'def:mmconline', say: 'the card identified: its size', weight: 2 },
+        { at: 'def:mmcbio', say: 'blocks read by SD commands', weight: 3 },
+        { at: 'def:identify', say: "the CSD register decoded", weight: 1 },
+      ],
+      related: ['arm/emmc.c'],
+    },
+    'sdscsi.c': {
+      digest: 'ae9407335d8a',
+      summary: 'SCSI commands for any controller: test, inquiry, capacity, read(10/16) and write, used by sdata for ATAPI.',
+      important: [
+        { at: 'def:scsibio', say: 'a block read as a SCSI command', weight: 2 },
+        { at: 'def:scsionline', say: 'capacity read', weight: 1 },
+        { at: 'def:scsirio', say: "a request through the controller's rio", weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('Storage: one device, controllers as tables', [
+      ['devsd.c', '#S: disks as files'],
+      ['sd.h', 'SDev, SDunit, SDifc'],
+      ['sdmmc.c', 'SD cards (the Pi)'],
+      ['arm/', 'the Pi\'s SD host: emmc'],
+      ['386/', 'IDE disks, floppies (the PC)'],
+      ['sdscsi.c', 'SCSI commands'],
+      ['../../files/', 'the channels'],
+    ], [
+      ['../../files/', 'devsd.c', 'devtab[#S]'],
+      ['devsd.c', 'sdmmc.c', 'ifc->bio'],
+      ['devsd.c', '386/', 'ifc->bio'],
+      ['sdmmc.c', 'arm/', 'SDio: cmd, io'],
+      ['386/', 'sdscsi.c', 'ATAPI'],
+      ['sdmmc.c', 'sd.h', 'implements SDifc'],
+    ]),
+    skeletons.chain('A block read from the Pi\'s SD card', [
+      ['devsd.c:def:sdread', 'read of /dev/sdM0/data', ''],
+      ['devsd.c:def:sdbio', 'into whole blocks', 'Qdata'],
+      ['sdmmc.c:def:mmcbio', 'SD read commands', 'ifc->bio'],
+      ['arm/emmc.c:def:emmccmd', "a command to the host's registers", 'io->cmd'],
+      ['arm/emmc.c:def:emmcio', 'the data moved', 'io->io'],
+    ]),
+    {
+      name: 'devsd.c: controllers, units, partitions',
+      bones: [
+        { at: 'devsd.c:def:sdreset', role: 'boot: controllers found' },
+        { at: 'devsd.c:def:sdgetdev', role: 'a controller by letter' },
+        { at: 'devsd.c:def:sdinitpart', role: 'a unit online, its parts' },
+        { at: 'devsd.c:def:sdgen', role: 'the tree' },
+        { at: 'devsd.c:def:sdread', role: 'read' },
+        { at: 'devsd.c:def:sdwrite', role: 'write, ctl' },
+        { at: 'devsd.c:def:sdbio', role: 'blocks' },
+      ],
+      joints: [
+        { from: 'devsd.c:def:sdreset', to: 'devsd.c:def:sdgetdev', say: 'devs[]' },
+        { from: 'devsd.c:def:sdgetdev', to: 'devsd.c:def:sdgen', say: 'a directory per unit' },
+        { from: 'devsd.c:def:sdinitpart', to: 'devsd.c:def:sdgen', say: 'the partitions' },
+        { from: 'devsd.c:def:sdread', to: 'devsd.c:def:sdbio', say: 'data' },
+        { from: 'devsd.c:def:sdwrite', to: 'devsd.c:def:sdbio', say: 'data' },
+      ],
+    },
+    {
+      name: 'sdmmc.c: an SD card as an SDifc',
+      bones: [
+        { at: 'sdmmc.c:code:"SDifc sdmmcifc = {"', role: 'the table' },
+        { at: 'sdmmc.c:def:mmcpnp', role: 'found at boot' },
+        { at: 'sdmmc.c:def:mmconline', role: 'the card identified' },
+        { at: 'sdmmc.c:def:identify', role: 'CSD: the size' },
+        { at: 'sdmmc.c:def:mmcbio', role: 'blocks read and written' },
+      ],
+      joints: [
+        { from: 'sdmmc.c:code:"SDifc sdmmcifc = {"', to: 'sdmmc.c:def:mmcpnp', say: '.pnp' },
+        { from: 'sdmmc.c:code:"SDifc sdmmcifc = {"', to: 'sdmmc.c:def:mmconline', say: '.online' },
+        { from: 'sdmmc.c:def:mmconline', to: 'sdmmc.c:def:identify', say: 'the CSD' },
+        { from: 'sdmmc.c:code:"SDifc sdmmcifc = {"', to: 'sdmmc.c:def:mmcbio', say: '.bio' },
+      ],
+    },
+    skeletons.chain('sdscsi.c: SCSI over rio', [
+      ['sdscsi.c:def:scsiverify', 'the unit there?', ''],
+      ['sdscsi.c:def:scsionline', 'its capacity', 'then'],
+      ['sdscsi.c:def:scsibio', 'blocks', 'reads'],
+      ['sdscsi.c:def:scsirio', "the controller's rio", 'a request'],
+    ]),
+  ],
+}

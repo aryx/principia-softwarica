@@ -1,0 +1,152 @@
+// kernel/buses/user/usb/serial/: what the code map says of it (tinybox
+// codemap; the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12)
+local skeletons = import '../../../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'usb/serial: USB serial adapters (FTDI, Prolific, Silicon Labs, debug cables) served as eiaU files, like #t.',
+  files: {
+    'serial.c': {
+      digest: '84e9a987bee0',
+      summary: "The chip-independent half: a port's files (data, ctl), its ctl commands, the chip chosen by vendor id.",
+      capitals: [
+        { at: 'def:serialmain', say: 'a device: its chip, then a tree per port' },
+      ],
+      important: [
+        { at: 'comment:"This part takes care of locking"', say: 'the chips need no locks of their own', weight: 1 },
+        { at: 'code:"if(plmatch(buf) == 0)"', say: 'Prolific, debug cable, FTDI, Silicon Labs: in turn', weight: 3 },
+        { at: 'def:serialctl', say: "#t's commands: 'b9600', 'l8', 'pn', 'd1'...", weight: 3 },
+        { at: 'def:dread', say: 'the data file read, from the chip', weight: 2 },
+        { at: 'def:dwrite', say: 'written: data, or ctl commands', weight: 1 },
+        { at: 'def:serialrecover', say: 'errors: the device reset', weight: 1 },
+        { at: 'def:findendpoints', say: 'bulk in, bulk out, interrupt', weight: 1 },
+      ],
+      links: [
+        { from: 'def:dwrite', to: 'def:serialctl' },
+        { from: 'def:serialmain', to: 'def:findendpoints' },
+      ],
+      related: ['../../../devuart.c'],
+    },
+    'serial.h': {
+      digest: 'bf79ad4a982c',
+      summary: "Serial (a device), Serialport (a port: its settings, endpoints, files), Serialops (a chip's functions).",
+      capitals: [
+        { at: 'type:Serialops', say: "a chip's functions: init, setparam..." },
+      ],
+      important: [
+        { at: 'type:Serialport', say: "a port: baud, bits, parity, lines' state", weight: 2 },
+        { at: 'type:Serial', say: 'a device: its ports and its chip', weight: 2 },
+        { at: 'type:Cinfo', say: 'a chip by vendor and device id', weight: 1 },
+      ],
+    },
+    'ftdi.c': {
+      digest: '43a38b4911c8',
+      summary: "FTDI's chips (FT232, FT2232 and their JTAG port): baud divisors, status bytes in every packet.",
+      important: [
+        { at: 'code:"Serialops ftops = {"', say: 'the chip, for serial.c', weight: 2 },
+        { at: 'def:ftmatch', say: 'by vendor and device ids', weight: 1 },
+        { at: 'def:ftbaudcalcdiv', say: 'a baud as a divisor with an odd fraction', weight: 2 },
+        { at: 'def:ftsetparam', say: 'baud, bits, parity, flow control', weight: 1 },
+        { at: 'def:epreader', say: 'a process: reads, the 2 status bytes stripped', weight: 3 },
+        { at: 'def:ftinit', say: 'reset, the type found, the reader started', weight: 1 },
+      ],
+    },
+    'ftdi.h': {
+      digest: '62bd2f4da127',
+      summary: "FTDI's vendor and device ids (hundreds of gadgets built on the chip) and its requests.",
+    },
+    'prolific.c': {
+      digest: '68ba26c1ca90',
+      summary: 'Prolific PL2303 adapters: vendor requests, line settings, modem status from the interrupt endpoint.',
+      important: [
+        { at: 'code:"Serialops plops = {"', say: 'the chip, for serial.c', weight: 2 },
+        { at: 'def:plmatch', say: 'by vendor and device ids', weight: 1 },
+        { at: 'def:plinit', say: 'the flavour guessed, the init dance', weight: 2 },
+        { at: 'def:heuristicid', say: 'the flavour from the packet size: no doc', weight: 1 },
+        { at: 'def:plsetparam', say: 'baud, bits, parity: one control request', weight: 2 },
+        { at: 'def:statusreader', say: 'a process watching modem lines', weight: 1 },
+      ],
+    },
+    'prolific.h': {
+      digest: 'bf14d8593ce0',
+      summary: "The PL2303's flavours, requests, status bits, and the cables built on it.",
+    },
+    'silabs.c': {
+      digest: 'c245912246a6',
+      summary: 'Silicon Labs CP210x adapters: a few vendor requests.',
+      important: [{ at: 'code:"Serialops slops = {"', say: 'the chip, for serial.c', weight: 2 }],
+    },
+    'silabs.h': { digest: '35024b392cbe', summary: 'The Silicon Labs chip for serial.c: slops, slmatch.' },
+    'ucons.c': {
+      digest: '2b20a552dd27',
+      summary: 'A USB debug cable (Net20DC): a serial line with nothing to set.',
+      important: [{ at: 'comment:"all nops"', say: 'no settings: only data', weight: 1 }],
+    },
+    'ucons.h': { digest: '85d8b97d782b', summary: 'The debug cable for serial.c: its ids, uconsops.' },
+    'main.c': {
+      digest: '2be14a08f185',
+      summary: 'usb/serial as a program: a file server started, the adapters found by vendor.',
+    },
+  },
+  skeletons: [
+    skeletons.cmd('usb/serial: an adapter as eiaU files', 'main.c:def:threadmain', [
+      ['../lib/devs.c:def:startdevs', 'the adapters found', 'matchserial'],
+      ['serial.c:def:serialmain', 'the chip chosen, a tree per port', 'each'],
+      ['serial.c:def:dwrite', 'a file written', '9P Twrite'],
+      ['serial.c:def:serialctl', "a ctl command, as #t's", 'eiaUctl'],
+      ['serial.h:type:Serialops', "the chip's function", 'setparam...'],
+    ]),
+    {
+      name: 'serial.c over a chip',
+      bones: [
+        { at: 'serial.c:def:serialmain', role: 'the chip chosen' },
+        { at: 'serial.h:type:Serialops', role: "the chip's functions" },
+        { at: 'serial.c:def:dread', role: 'data in' },
+        { at: 'serial.c:def:dwrite', role: 'data or commands out' },
+        { at: 'serial.c:def:serialctl', role: 'a line set' },
+        { at: 'serial.c:def:serialrecover', role: 'errors' },
+      ],
+      joints: [
+        { from: 'serial.c:def:serialmain', to: 'serial.h:type:Serialops', say: 'plops, ftops, slops, uconsops' },
+        { from: 'serial.c:def:dwrite', to: 'serial.c:def:serialctl', say: 'the ctl file' },
+        { from: 'serial.c:def:serialctl', to: 'serial.h:type:Serialops', say: 'setparam' },
+        { from: 'serial.h:type:Serialops', to: 'serial.c:def:dread', say: 'wait4data' },
+        { from: 'serial.c:def:dread', to: 'serial.c:def:serialrecover', say: 'an error' },
+      ],
+    },
+    {
+      name: 'An FTDI chip',
+      bones: [
+        { at: 'ftdi.c:def:ftmatch', role: 'recognized' },
+        { at: 'ftdi.c:code:"Serialops ftops = {"', role: 'its functions' },
+        { at: 'ftdi.c:def:ftinit', role: 'set up' },
+        { at: 'ftdi.c:def:ftsetparam', role: 'line settings' },
+        { at: 'ftdi.c:def:ftbaudcalcdiv', role: 'the baud divisor' },
+        { at: 'ftdi.c:def:epreader', role: 'data in, status stripped' },
+      ],
+      joints: [
+        { from: 'ftdi.c:def:ftmatch', to: 'ftdi.c:code:"Serialops ftops = {"', say: 'chosen' },
+        { from: 'ftdi.c:code:"Serialops ftops = {"', to: 'ftdi.c:def:ftinit', say: '.init' },
+        { from: 'ftdi.c:def:ftsetparam', to: 'ftdi.c:def:ftbaudcalcdiv', say: 'the baud' },
+        { from: 'ftdi.c:def:ftinit', to: 'ftdi.c:def:epreader', say: 'a process' },
+      ],
+    },
+    {
+      name: 'A Prolific chip',
+      bones: [
+        { at: 'prolific.c:def:plmatch', role: 'recognized' },
+        { at: 'prolific.c:code:"Serialops plops = {"', role: 'its functions' },
+        { at: 'prolific.c:def:plinit', role: 'set up' },
+        { at: 'prolific.c:def:plsetparam', role: 'line settings' },
+        { at: 'prolific.c:def:vendorwrite', role: 'a vendor request' },
+        { at: 'prolific.c:def:statusreader', role: 'modem lines watched' },
+      ],
+      joints: [
+        { from: 'prolific.c:def:plmatch', to: 'prolific.c:code:"Serialops plops = {"', say: 'chosen' },
+        { from: 'prolific.c:code:"Serialops plops = {"', to: 'prolific.c:def:plinit', say: '.init' },
+        { from: 'prolific.c:def:plinit', to: 'prolific.c:def:vendorwrite', say: 'the init dance' },
+        { from: 'prolific.c:def:plinit', to: 'prolific.c:def:statusreader', say: 'a process' },
+      ],
+    },
+  ],
+}

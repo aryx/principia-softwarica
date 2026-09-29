@@ -1,0 +1,357 @@
+// editors/sam/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12). sam
+// is not presented in a book (ed is, ../ed.nw); Pike's paper "The Text
+// Editor sam" (1987) explains it. Many files declare their functions
+// before defining them: those anchors are code:"name(its parameters",
+// the definition's own line.
+local skeletons = import '../../skeletons.libsonnet';
+// a module's skeleton: bones and joints within file f
+local m(f, name, bones, joints) = skeletons.parts(
+  name,
+  [[f + ':' + b[0], b[1]] for b in bones],
+  [[f + ':' + j[0], f + ':' + j[1], j[2]] for j in joints]
+);
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "sam, Pike's editor (1987), its host half: files, structural regexps, undo; samterm draws.",
+  files: {
+    'sam.c': {
+      summary: 'main: flags, the terminal started, files named; then the command loop; files, undo, cd.',
+      digest: '75d14458b230',
+      capitals: [{ at: 'def:main', say: 'sam starts: samterm booted, then cmdloop' }],
+      important: [
+        { at: 'code:startup(machine, Rflag', say: 'samterm forked or reached remotely (-r)', weight: 2 },
+        { at: 'code:setjmp(mainloop);', say: "error() longjmps here: the loop starts again", weight: 2 },
+        { at: 'code:rescue(void)', say: 'a crash: modified files saved to sam.save', weight: 1 },
+        { at: 'code:undo(int isundo)', say: 'undo across files, by sequence number', weight: 1 },
+        { at: 'code:edit(File *f, int cmd)', say: 'e, r: a file read into a File', weight: 1 },
+      ],
+    },
+    'sam.h': {
+      summary: 'The host\'s types: File (a Buffer, its undo log, dot, what the terminal has), Buffer, Disk, String.',
+      digest: 'c2abb3c11cad',
+      capitals: [
+        { at: 'comment:"transcript of changes"', say: 'struct File: text, undo log, dot, rasp' },
+        { at: 'type:Posn', say: 'a position: a rune offset in a file' },
+      ],
+      important: [
+        { at: 'comment:"position of cache"', say: 'struct Buffer: a cache over disk blocks', weight: 2 },
+        { at: 'comment:"length of temp file"', say: 'struct Disk: all text in one temp file', weight: 1 },
+        { at: 'comment:"map of what terminal\'s got"', say: 'the rasp: which spans samterm holds', weight: 2 },
+        { at: 'comment:"what terminal thinks is current range"', say: 'dot as the terminal saw it', weight: 1 },
+      ],
+    },
+    'parse.h': {
+      summary: 'The command language\'s tree: Addr, Cmd, and the command table (Cmdtab) mapping a letter to its function.',
+      digest: 'e5e3ba50f2d8',
+      capitals: [{ at: 'comment:"target of x, g"', say: 'struct Cmd: a parsed command, nested for x, g, {' }],
+      important: [
+        { at: 'comment:"left side of , and ;"', say: 'struct Addr: an address, a tree too', weight: 2 },
+        { at: 'comment:"function to call with parse tree"', say: 'Cmdtab: a letter to its x_cmd', weight: 2 },
+      ],
+    },
+    'cmd.c': {
+      summary: 'The command parser: a line (typed or from samterm) to a Cmd tree, addresses and regexps included.',
+      digest: 'ae2eae8fddca',
+      capitals: [{ at: 'code:cmdloop(void)', say: 'parse a command, run it, update the terminal' }],
+      important: [
+        { at: 'def:cmdtab', say: 'the table: letter, default address, function', weight: 3 },
+        { at: 'code:parsecmd(int nest)', say: 'recursive descent: nested for { } and x/re/', weight: 2 },
+        { at: 'code:Addr *ap, *nap;', say: 'one address: #n, n, /re/, ?re?, ., $', weight: 1 },
+        { at: 'code:addr.left = simpleaddr();', say: 'a1,a2 and a1;a2', weight: 1 },
+        { at: 'code:if(rcv() == 0)', say: 'downloaded: input is samterm\'s messages', weight: 1 },
+      ],
+    },
+    'xec.c': {
+      summary: 'The command executor: a Cmd run on a File, one function per letter; x, y, g, v loop over matches.',
+      digest: '09b349e3173e',
+      capitals: [{ at: 'code:cmdexec(File *f, Cmd *cp)', say: 'a command: default address, then its function' }],
+      important: [
+        { at: 'code:(*cmdtab[i].fn)(f, cp)', say: 'the dispatch: through the table', weight: 2 },
+        { at: 'code:s_cmd(File *f, Cmd *cp)', say: 's: matches replaced, &, \\1', weight: 1 },
+        { at: 'code:looper(File *f, Cmd *cp, int xy)', say: 'x and y: structural regexps, the idea', weight: 3 },
+        { at: 'code:filelooper(Cmd *cp, int XY)', say: 'X and Y: a command over files', weight: 1 },
+      ],
+    },
+    'address.c': {
+      summary: 'Addresses evaluated: characters, lines, regexp searches forward and back, a1,a2 and a1;a2.',
+      digest: 'b8a9306ff7ca',
+      capitals: [],
+      important: [
+        { at: 'def:address', say: 'an Addr tree to a range in a file', weight: 2 },
+        { at: 'def:nextmatch', say: 'the next match, wrapping round', weight: 1 },
+        { at: 'def:lineaddr', say: 'line n: counted from a position', weight: 1 },
+      ],
+    },
+    'regexp.c': {
+      summary: "Regular expressions: compiled to an NFA, run Thompson's way forward (execute) or backward (bexecute).",
+      digest: '774c8626fc11',
+      important: [
+        { at: 'code:realcompile(Rune *s)', say: 'operator precedence to instructions', weight: 2 },
+        { at: 'code:execute(File *f, Posn startp, Posn eof)', say: 'all threads stepped together, rune by rune', weight: 3 },
+        { at: 'code:bexecute(File *f, Posn startp)', say: 'the same backwards, for ?re?', weight: 1 },
+      ],
+    },
+    'file.c': {
+      summary: "A File's edits: logged as undo records (delta), applied at the command's end, undone by sequence.",
+      digest: 'd515a1443af5',
+      important: [
+        { at: 'comment:"Structure of Undo list"', say: 'the undo log read backwards', weight: 3 },
+        { at: 'code:loginsert(File *f, uint p0', say: 'an insertion logged, not yet done', weight: 2 },
+        { at: 'code:fileupdate(File *f, int notrans, int toterm)', say: 'the logged changes applied, together', weight: 2 },
+        { at: 'code:fileundo(File *f, int isundo', say: 'one sequence undone, its inverse to epsilon', weight: 1 },
+      ],
+    },
+    'buff.c': {
+      summary: 'Buffers: runes cached in memory over blocks in the temporary disk file.',
+      digest: '7e0937219938',
+      important: [
+        { at: 'def:setcache', say: 'the one cached block moved to q0', weight: 2 },
+        { at: 'def:bufinsert', say: 'runes inserted, blocks split as they fill', weight: 1 },
+      ],
+    },
+    'disk.c': {
+      summary: 'The temporary disk file: blocks allocated in size buckets, freed onto lists.',
+      digest: '5e16d3acf0a7',
+      important: [{ at: 'def:disknewblock', say: 'a block from the free list of its size', weight: 1 }],
+    },
+    'mesg.c': {
+      summary: "The host's side of the protocol: samterm's T messages decoded and answered, H messages sent back.",
+      digest: 'f1dc657a4955',
+      capitals: [{ at: 'code:inmesg(Tmesg type)', say: "a message from samterm: typing, cut, a click..." }],
+      important: [
+        { at: 'code:rcv(void){', say: 'bytes to messages: type, two-byte count, data', weight: 2 },
+        { at: 'code:case Ttype:', say: 'typed text: inserted straight into the File', weight: 2 },
+        { at: 'code:case Trequest:', say: 'samterm asks for text it lacks', weight: 1 },
+        { at: 'code:panic("outsend")', say: 'a message out, to samterm', weight: 1 },
+      ],
+    },
+    'mesg.h': {
+      summary: 'The protocol between sam and samterm: Tmesg (terminal to host), Hmesg (host to terminal); samterm includes it.',
+      digest: 'ee9230e6377d',
+      capitals: [{ at: 'code:typedef enum Tmesg', say: 'what samterm tells sam' }],
+      important: [{ at: 'code:typedef enum Hmesg', say: 'what sam tells samterm', weight: 2 }],
+    },
+    'rasp.c': {
+      summary: "The rasp: which spans of a file samterm holds, so that only those changes are sent to it.",
+      digest: '44bdb56ee85c',
+      important: [
+        { at: 'comment:"a rasp is a list of spans"', say: "the terminal's copy, known to the host", weight: 3 },
+        { at: 'code:raspinsert(File *f, uint p1', say: 'an insertion: sent only if samterm has it', weight: 1 },
+      ],
+    },
+    'moveto.c': {
+      summary: "Dot moved and shown: the terminal told, an origin chosen, double-click's word or bracket match.",
+      digest: '5dad7a9c4956',
+      important: [{ at: 'def:doubleclick', say: 'a word, a line, or brackets matched', weight: 1 }],
+    },
+    'io.c': {
+      summary: 'Files read and written; the terminal booted (forked with pipes, or on another machine by rx).',
+      digest: 'bd502a712004',
+      important: [
+        { at: 'def:startup', say: 'samterm connected before anything else', weight: 2 },
+        { at: 'def:bootterm', say: 'two pipes, a fork, samterm execed', weight: 2 },
+        { at: 'def:readio', say: 'a file into a File, runes', weight: 1 },
+      ],
+    },
+    'shell.c': {
+      summary: 'The ! < > | commands: a shell run on a range, its output replacing it or its errors shown.',
+      digest: '8159e3f0c363',
+      important: [{ at: 'def:plan9', say: 'fork rc -c, pipes to and from the range', weight: 2 }],
+    },
+    'multi.c': {
+      summary: 'The list of open files, sorted for the menu, found by name.',
+      digest: '06839b2473a1',
+    },
+    'string.c': {
+      summary: 'String: a growable array of runes, and the temporary strings for messages.',
+      digest: '00fa66826940',
+    },
+    'list.c': {
+      summary: 'List: a growable array of pointers or positions (files, rasp spans, commands).',
+      digest: '76fb2b0d1f96',
+    },
+    'error.c': {
+      summary: 'Errors (longjmp to the command loop) and warnings, printed through the terminal.',
+      digest: 'c9e7cee561e5',
+      important: [{ at: 'def:error', say: 'message, then back to mainloop', weight: 1 }],
+    },
+    'errors.h': {
+      summary: 'The error and warning numbers, with their texts in error.c.',
+      digest: '415cb455c50b',
+    },
+    'plan9.c': {
+      summary: "Plan 9's part: names of programs, debug printing, stat, notes, waiting for children.",
+      digest: '00c9d051d13a',
+    },
+    'sys.c': {
+      summary: 'Read, Write and Seek: system calls that raise sam errors.',
+      digest: '6ad66e988d75',
+    },
+    'util.c': {
+      summary: 'Bytes to runes without splitting a rune; the file buffer allocator.',
+      digest: '5d0527dc1723',
+    },
+  },
+  skeletons: [
+    {
+      name: 'sam, the host: a command parsed, executed on a File, the terminal told',
+      bones: [
+        { at: 'sam.c:def:main', role: 'main: samterm started, files named' },
+        { at: 'cmd.c:code:cmdloop(void)', role: 'the loop: parse, execute, update' },
+        { at: 'cmd.c:code:parsecmd(int nest)', role: 'text to a Cmd tree' },
+        { at: 'xec.c:code:cmdexec(File *f, Cmd *cp)', role: 'a Cmd run, via cmdtab' },
+        { at: 'regexp.c:code:execute(File *f, Posn startp, Posn eof)', role: 'regexps: matches in a File' },
+        { at: 'file.c:code:fileupdate(File *f, int notrans, int toterm)', role: 'logged edits applied' },
+        { at: 'rasp.c', role: "the terminal's copy kept in step" },
+        { at: 'mesg.c:code:inmesg(Tmesg type)', role: "samterm's messages: typing, mouse edits" },
+      ],
+      joints: [
+        { from: 'sam.c:def:main', to: 'cmd.c:code:cmdloop(void)', say: 'after startup' },
+        { from: 'cmd.c:code:cmdloop(void)', to: 'cmd.c:code:parsecmd(int nest)', say: 'a line' },
+        { from: 'cmd.c:code:parsecmd(int nest)', to: 'xec.c:code:cmdexec(File *f, Cmd *cp)', say: 'a Cmd' },
+        { from: 'xec.c:code:cmdexec(File *f, Cmd *cp)', to: 'regexp.c:code:execute(File *f, Posn startp, Posn eof)', say: 'x, s, /re/' },
+        { from: 'xec.c:code:cmdexec(File *f, Cmd *cp)', to: 'file.c:code:fileupdate(File *f, int notrans, int toterm)', say: 'logged changes' },
+        { from: 'file.c:code:fileupdate(File *f, int notrans, int toterm)', to: 'rasp.c', say: 'each change' },
+        { from: 'mesg.c:code:inmesg(Tmesg type)', to: 'file.c:code:fileupdate(File *f, int notrans, int toterm)', say: 'typed text' },
+      ],
+    },
+    m('sam.c', 'sam.c: start, loop, and the file commands', [
+      ['def:main', 'flags, disk, terminal, files'],
+      ['code:startup(machine, Rflag', 'samterm started'],
+      ['code:setjmp(mainloop);', 'where errors return'],
+      ['code:edit(File *f, int cmd)', 'e, r: a file read'],
+      ['code:undo(int isundo)', 'u: undo by sequence'],
+    ], [
+      ['def:main', 'code:startup(machine, Rflag', 'first'],
+      ['def:main', 'code:setjmp(mainloop);', 'then cmdloop'],
+    ]),
+    m('cmd.c', 'cmd.c: input to a Cmd tree', [
+      ['code:cmdloop(void)', 'the loop'],
+      ['code:inputc(void)', 'a char: typed, or from samterm'],
+      ['code:parsecmd(int nest)', 'a command, recursively'],
+      ['code:addr.left = simpleaddr();', 'an address'],
+      ['def:cmdtab', 'what each letter takes'],
+    ], [
+      ['code:cmdloop(void)', 'code:parsecmd(int nest)', 'a command'],
+      ['code:parsecmd(int nest)', 'code:inputc(void)', 'chars'],
+      ['code:parsecmd(int nest)', 'code:addr.left = simpleaddr();', 'its address'],
+      ['code:parsecmd(int nest)', 'def:cmdtab', 'its shape'],
+    ]),
+    m('xec.c', 'xec.c: execution, and the loops over matches', [
+      ['code:cmdexec(File *f, Cmd *cp)', 'address, then the letter'],
+      ['code:s_cmd(File *f, Cmd *cp)', 's: substitute'],
+      ['code:x_cmd(File *f, Cmd *cp)', 'x, y'],
+      ['code:looper(File *f, Cmd *cp, int xy)', 'each match or gap: the command again'],
+    ], [
+      ['code:cmdexec(File *f, Cmd *cp)', 'code:x_cmd(File *f, Cmd *cp)', 'x'],
+      ['code:x_cmd(File *f, Cmd *cp)', 'code:looper(File *f, Cmd *cp, int xy)', 'loops'],
+      ['code:looper(File *f, Cmd *cp, int xy)', 'code:cmdexec(File *f, Cmd *cp)', 'per match'],
+    ]),
+    m('address.c', 'address.c: an Addr tree evaluated', [
+      ['def:address', 'the evaluator'],
+      ['def:nextmatch', 'a regexp search'],
+      ['code:charaddr(Posn l, Address addr, int sign)', '#n'],
+      ['def:lineaddr', 'n'],
+    ], [
+      ['def:address', 'def:nextmatch', '/re/'],
+      ['def:address', 'code:charaddr(Posn l, Address addr, int sign)', '#n'],
+      ['def:address', 'def:lineaddr', 'n'],
+    ]),
+    m('regexp.c', 'regexp.c: compile, then run as an NFA', [
+      ['code:compile(String *s)', 'cached by last pattern'],
+      ['code:realcompile(Rune *s)', 'operators and operands to Insts'],
+      ['code:lex(void){', 'the pattern tokenized'],
+      ['code:execute(File *f, Posn startp, Posn eof)', 'forward, all threads at once'],
+      ['code:bexecute(File *f, Posn startp)', 'backward'],
+    ], [
+      ['code:compile(String *s)', 'code:realcompile(Rune *s)', 'a new pattern'],
+      ['code:realcompile(Rune *s)', 'code:lex(void){', 'tokens'],
+      ['code:realcompile(Rune *s)', 'code:execute(File *f, Posn startp, Posn eof)', 'the program'],
+    ]),
+    m('file.c', 'file.c: edits logged, applied, undone', [
+      ['code:loginsert(File *f, uint p0', 'an insertion logged'],
+      ['code:logdelete(File *f, uint p0, uint p1)', 'a deletion logged'],
+      ['code:fileupdate(File *f, int notrans, int toterm)', 'the log applied, undo recorded'],
+      ['code:fileundo(File *f, int isundo', 'a sequence undone'],
+    ], [
+      ['code:loginsert(File *f, uint p0', 'code:fileupdate(File *f, int notrans, int toterm)', 'at command end'],
+      ['code:logdelete(File *f, uint p0, uint p1)', 'code:fileupdate(File *f, int notrans, int toterm)', 'at command end'],
+      ['code:fileupdate(File *f, int notrans, int toterm)', 'code:fileundo(File *f, int isundo', 'the delta'],
+    ]),
+    m('buff.c', 'buff.c: a cache over disk blocks', [
+      ['def:setcache', 'the cache moved'],
+      ['def:bufinsert', 'insert'],
+      ['def:bufdelete', 'delete'],
+      ['def:bufread', 'read'],
+    ], [
+      ['def:bufinsert', 'def:setcache', 'q0'],
+      ['def:bufdelete', 'def:setcache', 'q0'],
+      ['def:bufread', 'def:setcache', 'q0'],
+    ]),
+    m('mesg.c', "mesg.c: samterm's messages in, the host's out", [
+      ['code:rcv(void){', 'bytes to a message'],
+      ['code:inmesg(Tmesg type)', 'the message handled'],
+      ['code:outstart(Hmesg type)', 'a reply begun'],
+      ['code:panic("outsend")', 'and sent'],
+    ], [
+      ['code:rcv(void){', 'code:inmesg(Tmesg type)', 'a message'],
+      ['code:inmesg(Tmesg type)', 'code:outstart(Hmesg type)', 'answers'],
+      ['code:outstart(Hmesg type)', 'code:panic("outsend")', 'the data'],
+    ]),
+    m('rasp.c', "rasp.c: the terminal's copy tracked", [
+      ['code:raspinsert(File *f, uint p1', 'an insert, maybe sent'],
+      ['code:raspdelete(File *f, uint p1, uint p2', 'a delete, maybe sent'],
+      ['code:raspflush(File *f)', 'grown/shrunk sent at last'],
+      ['code:rcut(List *r, Posn p1, Posn p2)', 'the span list edited'],
+    ], [
+      ['code:raspinsert(File *f, uint p1', 'code:raspflush(File *f)', 'accumulated'],
+      ['code:raspdelete(File *f, uint p1, uint p2', 'code:rcut(List *r, Posn p1, Posn p2)', 'spans'],
+    ]),
+    m('moveto.c', 'moveto.c: dot shown to the terminal', [
+      ['def:moveto', 'dot set'],
+      ['def:telldot', 'the terminal told'],
+      ['def:lookorigin', 'an origin to show it'],
+      ['def:doubleclick', 'a double-click expanded'],
+    ], [
+      ['def:moveto', 'def:telldot', 'Hmoveto'],
+    ]),
+    m('io.c', 'io.c: files and the terminal connection', [
+      ['def:startup', 'at start'],
+      ['def:bootterm', 'samterm forked'],
+      ['def:connectto', 'or a remote sam'],
+      ['def:readio', 'a file read'],
+      ['def:writef', 'a file written'],
+    ], [
+      ['def:startup', 'def:connectto', '-r'],
+      ['def:startup', 'def:bootterm', 'then'],
+    ]),
+    m('shell.c', 'shell.c: running commands on ranges', [
+      ['def:plan9', '! < > |: fork, pipe, exec rc'],
+      ['code:statfile(errfile, 0, 0, 0, &l, 0)', 'errors shown'],
+      ['def:errfile', 'where errors went'],
+    ], [
+      ['def:plan9', 'code:statfile(errfile, 0, 0, 0, &l, 0)', 'after'],
+      ['code:statfile(errfile, 0, 0, 0, &l, 0)', 'def:errfile', 'reads'],
+    ]),
+    m('string.c', 'string.c: rune strings', [
+      ['def:Strinsure', 'room made'],
+      ['def:Straddc', 'append a rune'],
+      ['def:Strinsert', 'insert'],
+      ['def:tmprstr', 'a temporary one'],
+    ], [
+      ['def:Straddc', 'def:Strinsure', 'grows'],
+      ['def:Strinsert', 'def:Strinsure', 'grows'],
+    ]),
+    m('plan9.c', "plan9.c: sam's contact with Plan 9", [
+      ['def:dprint', 'diagnostics'],
+      ['def:statfile', 'a file\'s identity'],
+      ['def:notifyf', 'a note: hangup saves'],
+    ], [
+      ['def:notifyf', 'def:dprint', 'reports'],
+    ]),
+  ],
+  views: [
+    { name: 'sam and samterm, host and terminal', files: ['mesg.h', 'mesg.c', 'rasp.c', '../samterm/mesg.c', '../samterm/rasp.c'] },
+  ],
+}

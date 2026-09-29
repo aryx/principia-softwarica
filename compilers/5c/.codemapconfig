@@ -1,0 +1,244 @@
+// compilers/5c/: what the code map says of it (tinybox codemap; the format:
+// ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12). The
+// book: ../Compiler.nw ("ARM assembly generation", "Assembly-level
+// optimizations"). 5c = the front end ../cc/ (cc.a) + ../cc2/'s pgen.c and
+// pswt.c, compiled here with this gc.h, + these files. mkenam builds enam.c
+// from include/obj/5.out.h.
+local skeletons = import '../../skeletons.libsonnet';
+local M(f, name, steps) = skeletons.chain(name, [[f + ':' + s[0], s[1], s[2]] for s in steps]);
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "5c's ARM back end: expression trees to ARM instructions (Progs), registers allocated, peephole, the .5 object written.",
+  files: {
+    'gc.h': {
+      digest: '081a9df80b93',
+      summary: 'The back end\'s types: Prog (an instruction), Adr (an operand), Reg (a flow graph node), Case, Var, Rgn.',
+      capitals: [
+        { at: 'type:Prog', say: 'an ARM instruction, in a list' },
+        { at: 'type:Adr', say: 'an operand: register, constant, memory' },
+        { at: 'type:Reg', say: "the register allocator's flow node" },
+      ],
+      important: [
+        { at: 'type:Case', say: 'a switch case, for swit1', weight: 1 },
+        { at: 'type:Var', say: 'a variable the allocator tracks', weight: 1 },
+        { at: 'type:Rgn', say: 'a region: a variable\'s live range, its cost', weight: 2 },
+      ],
+      related: ['../../include/obj/5.out.h'],
+    },
+    'cgen.c': {
+      digest: 'f4ad6eaf1434',
+      summary: 'Expressions to ARM code: cgen walks a typed tree, the harder side first (Sethi-Ullman), into registers.',
+      capitals: [{ at: 'def:cgen', say: 'an expression: code into nn' }],
+      important: [
+        { at: 'def:cgenrel', say: 'the big switch over operators', weight: 3 },
+        { at: 'code:"case OFUNC:"', say: 'a call: arguments stored, BL', weight: 2 },
+        { at: 'def:lcgen', say: 'an address computed (an lvalue)', weight: 2 },
+        { at: 'def:boolgen', say: 'a condition: compare, branch', weight: 2 },
+        { at: 'def:sugen', say: 'structs: moved word by word', weight: 1 },
+        { at: 'def:reglcgen', say: 'an address into a register', weight: 1 },
+      ],
+      related: ['../cc2/pgen.c'],
+    },
+    'txt.c': {
+      digest: '66184ebe927a',
+      summary: 'The instruction emitter: registers handed out, operands (naddr), moves and opcodes appended as Progs; ginit, gclean.',
+      capitals: [
+        { at: 'def:gopcode', say: 'a C operator to its ARM opcode' },
+        { at: 'def:gclean', say: 'the globals, AEND, then outcode' },
+      ],
+      important: [
+        { at: 'def:ginit', say: "the machine's setup, called by main", weight: 2 },
+        { at: 'def:regalloc', say: 'a free register, for a node', weight: 3 },
+        { at: 'def:gmove', say: 'a move with the conversions it needs', weight: 2 },
+        { at: 'def:gins', say: 'a Prog appended', weight: 2 },
+        { at: 'def:naddr', say: 'a Node to an operand', weight: 2 },
+        { at: 'def:gbranch', say: 'a branch, target patched later', weight: 1 },
+        { at: 'def:patch', say: 'a branch target set', weight: 1 },
+      ],
+    },
+    'sgen.c': {
+      digest: '05e3b997f133',
+      summary: "Addressability (xcom): each node marked with how the ARM can reach it and how many registers it needs.",
+      important: [
+        { at: 'comment:"calculate addressability as follows"', say: 'the numbers: 20 constant, 10 name...', weight: 3 },
+        { at: 'def:xcom', say: 'addable and complex, bottom up', weight: 2 },
+      ],
+    },
+    'swt.c': {
+      digest: '558e0a082cb5',
+      summary: 'switch as a binary search, bitfields, multiplication by constants, and outcode: the Progs written to the .5 file.',
+      capitals: [{ at: 'def:outcode', say: 'the .5 object written' }],
+      important: [
+        { at: 'def:swit1', say: 'the cases: a binary search of compares', weight: 2 },
+        { at: 'def:zwrite', say: 'one Prog in the object format', weight: 2 },
+        { at: 'def:zname', say: 'a symbol, numbered once', weight: 1 },
+        { at: 'def:mulcon', say: 'x*constant as shifts and adds', weight: 1 },
+        { at: 'def:bitload', say: 'a bitfield read', weight: 1 },
+        { at: 'def:align', say: "the ARM's alignment rules", weight: 1 },
+      ],
+      related: ['../../include/obj/common.out.h'],
+    },
+    'reg.c': {
+      digest: 'a5133c61e6b2',
+      summary: "The register allocator (regopt): a flow graph of the function's Progs, liveness, loops, variables painted into registers.",
+      capitals: [{ at: 'def:regopt', say: 'variables into registers, per function' }],
+      important: [
+        { at: 'def:mkvar', say: 'an operand as a tracked variable', weight: 1 },
+        { at: 'def:prop', say: 'liveness, propagated backward', weight: 2 },
+        { at: 'def:loopit', say: 'loops found: uses in loops weigh more', weight: 2 },
+        { at: 'def:paint1', say: 'a region grown, its benefit counted', weight: 2 },
+        { at: 'def:paint3', say: 'the region rewritten to the register', weight: 1 },
+        { at: 'code:"peep();"', say: 'then the peephole', weight: 2 },
+      ],
+    },
+    'peep.c': {
+      digest: 'dc81946d5190',
+      summary: "The peephole optimizer: moves propagated away, shifts and increments folded into ARM operands, branches predicated.",
+      capitals: [{ at: 'def:peep', say: 'passes until nothing changes' }],
+      important: [
+        { at: 'def:subprop', say: 'a move removed by renaming', weight: 2 },
+        { at: 'def:copyprop', say: 'a copy propagated', weight: 2 },
+        { at: 'def:shiftprop', say: "a shift into the next op's operand", weight: 2 },
+        { at: 'def:xtramodes', say: 'pre/post-increment addressing', weight: 1 },
+        { at: 'def:predicate', say: "short branches become conditional ops", weight: 3 },
+        { at: 'def:copyu', say: 'how a Prog uses an operand', weight: 1 },
+      ],
+    },
+    'mul.c': {
+      digest: '321a9371c412',
+      summary: 'Multiplication by a constant as the shortest sequence of shifts, adds and subtracts found by search.',
+      important: [
+        { at: 'comment:"code sequences for multiply by constant"', say: 'the little language of the sequences', weight: 2 },
+        { at: 'def:mulcon0', say: 'a constant: cached, or searched', weight: 2 },
+        { at: 'def:docode', say: 'a sequence emitted', weight: 1 },
+      ],
+    },
+    'list.c': {
+      digest: '301630400bf6',
+      summary: 'Printing for -S and debugging: %P a Prog, %D an operand, %A an opcode, %R a register...',
+      important: [{ at: 'def:Pconv', say: 'an instruction as assembly text', weight: 2 }],
+    },
+    'enam.c': {
+      digest: '84b1d7b7a3ac',
+      summary: 'The opcode names, generated by mkenam from 5.out.h.',
+    },
+    'globals2.c': {
+      digest: '7141266a07f5',
+      summary: 'The back end\'s globals: the Prog list (firstp, lastp), the pc, break and continue targets, the allocator\'s tables.',
+      important: [
+        { at: 'def:firstp', say: 'the Progs of the function', weight: 2 },
+        { at: 'def:reg', say: 'which registers are in use', weight: 1 },
+        { at: 'def:region', say: "the allocator's regions", weight: 1 },
+      ],
+    },
+    'machcap.c': {
+      digest: '9a74d941bb9e',
+      summary: 'machcap: which operators the ARM does inline (none claimed: the default).',
+    },
+  },
+  skeletons: [
+    skeletons.chain("5c's back end: a function's body to the .5", [
+      ['../cc2/pgen.c:def:codgen', 'a function, from cc.y', ''],
+      ['../cc2/pgen.c:def:gen', 'its statements', 'statements'],
+      ['cgen.c:def:cgen', 'its expressions', 'expressions'],
+      ['txt.c:def:gins', 'ARM instructions appended', 'Progs'],
+      ['reg.c:def:regopt', 'registers allocated', 'the function\'s Progs'],
+      ['peep.c:def:peep', 'the peephole', 'then'],
+      ['txt.c:def:gclean', 'at the end of the file: globals', 'after yyparse'],
+      ['swt.c:def:outcode', 'the .5 written', 'all the Progs'],
+    ]),
+    skeletons.parts('The back end\'s files', [
+      ['../cc2/', 'the portable half: statements'],
+      ['cgen.c', 'expressions'],
+      ['sgen.c', 'addressability first'],
+      ['txt.c', 'registers and instructions'],
+      ['reg.c', 'register allocation'],
+      ['peep.c', 'peephole'],
+      ['swt.c', 'switches, and the object out'],
+      ['gc.h', 'Prog, Adr, Reg'],
+    ], [
+      ['../cc2/', 'cgen.c', 'expressions'],
+      ['cgen.c', 'sgen.c', 'marked'],
+      ['cgen.c', 'txt.c', 'instructions'],
+      ['../cc2/', 'reg.c', 'regopt'],
+      ['reg.c', 'peep.c', 'then'],
+      ['txt.c', 'swt.c', 'outcode'],
+    ]),
+    M('cgen.c', 'An expression to code', [
+      ['def:cgen', 'the entry', ''],
+      ['def:cgenrel', 'by operator', 'dispatch'],
+      ['def:lcgen', 'addresses', 'lvalues'],
+      ['def:boolgen', 'conditions', 'booleans'],
+      ['def:sugen', 'structs', 'aggregates'],
+    ]),
+    M('txt.c', 'Emitting instructions', [
+      ['def:ginit', 'set up', ''],
+      ['def:regalloc', 'a register', 'for a node'],
+      ['def:naddr', 'an operand', 'addressed'],
+      ['def:gopcode', 'an operator', 'emitted by'],
+      ['def:gins', 'a Prog appended', 'appended'],
+      ['def:gclean', 'the file finished', 'at the end'],
+    ]),
+    M('sgen.c', 'Addressability', [
+      ['def:xcom', 'each node marked', ''],
+      ['def:noretval', 'the return register cleared', 'function end'],
+      ['comment:"calculate addressability as follows"', 'the numbers', 'by'],
+    ]),
+    M('swt.c', 'Switches, special operations, the object', [
+      ['def:swit1', 'a switch', ''],
+      ['def:mulcon', 'a multiplication', 'constants'],
+      ['def:outcode', 'the file', 'at the end'],
+      ['def:zwrite', 'a Prog', 'each'],
+      ['def:zaddr', 'an operand', 'its operands'],
+    ]),
+    M('reg.c', 'Register allocation', [
+      ['def:regopt', 'the entry, per function', ''],
+      ['def:mkvar', 'variables found', 'operands'],
+      ['def:prop', 'liveness', 'flow'],
+      ['def:loopit', 'loop depth', 'weights'],
+      ['def:paint1', 'regions and costs', 'regions'],
+      ['def:paint3', 'rewritten', 'assigned'],
+    ]),
+    M('peep.c', 'The peephole', [
+      ['def:peep', 'the loop', ''],
+      ['def:subprop', 'moves removed', 'moves'],
+      ['def:copyprop', 'copies propagated', 'copies'],
+      ['def:shiftprop', 'shifts folded', 'ARM operands'],
+      ['def:xtramodes', 'addressing modes', 'increments'],
+      ['def:predicate', 'conditional execution', 'branches'],
+    ]),
+    M('mul.c', 'Constant multiplication', [
+      ['def:mulcon0', 'a constant', ''],
+      ['def:gen1', 'sequences searched', 'searched'],
+      ['def:docode', 'emitted', 'best'],
+    ]),
+    M('list.c', 'Printing', [
+      ['def:listinit', 'the formats installed', ''],
+      ['def:Pconv', 'a Prog', '%P'],
+      ['def:Dconv', 'an operand', '%D'],
+    ]),
+    M('globals2.c', 'The back end\'s state', [
+      ['def:firstp', 'the Prog list', ''],
+      ['def:pc', 'where we are', 'counted'],
+      ['def:region', 'register regions', 'allocator'],
+    ]),
+  ],
+  views: [
+    { name: '5c and 8c, file by file', files: ['cgen.c', '../8c/cgen.c', 'txt.c', '../8c/txt.c', 'reg.c', '../8c/reg.c', 'peep.c', '../8c/peep.c', 'swt.c', '../8c/swt.c'] },
+  ],
+  tours: [
+    {
+      name: 'From a function body to ARM code',
+      stops: [
+        { at: '../cc2/pgen.c:def:codgen', say: 'cc.y hands the checked body over as soon as the function ends.' },
+        { at: '../cc2/pgen.c:def:gen', say: 'Statements become branches; expressions go to cgen.' },
+        { at: 'sgen.c:def:xcom', say: 'First each node learns how it can be addressed and what it costs.' },
+        { at: 'cgen.c:def:cgenrel', say: 'Then the tree is walked, the costlier side first, into registers.' },
+        { at: 'txt.c:def:gopcode', say: 'An operator becomes an ARM opcode, a Prog in the list.' },
+        { at: 'reg.c:def:regopt', say: 'The function done, variables are painted into registers.' },
+        { at: 'peep.c:def:predicate', say: "The peephole's ARM trick: short branches become conditional instructions." },
+        { at: 'swt.c:def:outcode', say: 'At the end of the file, the Progs are written in the object format 5l reads.' },
+      ],
+    },
+  ],
+}

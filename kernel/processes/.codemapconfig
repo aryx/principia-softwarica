@@ -1,0 +1,237 @@
+// kernel/processes/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// The book: kernel/Kernel.nw, chapters Processes, Scheduling and IPC.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'Processes and scheduling: the Proc, the run queues, sleep and wakeup, rfork and exec, notes, groups.',
+  files: {
+    'portdat_processes.h': {
+      summary: 'The Proc, the big one: its state, segments, namespace, fds, notes, error labels; and the groups.',
+      digest: '1a442722782f',
+      capitals: [
+        { at: 'type:Proc', say: 'a process: everything the kernel knows of it' },
+        { at: 'def:waserror', say: "the kernel's try: setlabel on up->errlab" },
+      ],
+      important: [
+        { at: 'type:Procstate', say: 'Running, Ready, Wakeme, Queueing, Moribund...', weight: 3 },
+        { at: 'type:Pgrp', say: 'the namespace: the mount table, shared or copied', weight: 2 },
+        { at: 'type:Fgrp', say: 'the file descriptors: an array of Chan', weight: 2 },
+        { at: 'type:Rgrp', say: 'a rendezvous group', weight: 1 },
+        { at: 'type:Edf', say: 'real-time: period, deadline, cost', weight: 1 },
+        { at: 'comment:"waserror() =~ try"', say: 'error handling by setjmp/longjmp, per process', weight: 3 },
+        { at: 'type:Procalloc', say: 'the process table and its free list', weight: 1 },
+        { at: 'type:Schedq', say: 'a run queue, one per priority', weight: 2 },
+      ],
+    },
+    'portdat_processes.c': {
+      summary: "The processes' globals: the active CPUs, the profiling and tracing hooks.",
+      digest: '5c57c1743dbc',
+    },
+    'portfns_processes.h': {
+      summary: "Processes' functions, and the arch_ hooks each port gives: setlabel, gotolabel, forkchild, procsave.",
+      digest: '8d7533147de5',
+      important: [
+        { at: 'def:arch_setlabel', say: 'the context saved: sched and waserror both', weight: 3 },
+        { at: 'def:arch_gotolabel', say: 'the context resumed', weight: 3 },
+        { at: 'def:arch_forkchild', say: "the child's registers: rfork returns 0 there", weight: 2 },
+      ],
+    },
+    'proc.c': {
+      summary: 'The scheduler: priority run queues, sched and schedinit, ready, sleep/wakeup, new processes, exit.',
+      digest: 'e996c0ca74a8',
+      capitals: [
+        { at: 'def:proc_sched', say: 'sched: give up the CPU, switch to the next' },
+        { at: 'def:proc_sleep', say: 'sleep on a Rendez until the condition holds' },
+        { at: 'def:proc_ready', say: 'ready: a process into its run queue' },
+      ],
+      important: [
+        { at: 'def:schedinit', say: 'the per-CPU scheduler loop, entered by gotolabel', weight: 3 },
+        { at: 'comment:"from a arch_gotolabel(up->sched) by another process"', say: 'setlabel returns twice: here we were resumed', weight: 3 },
+        { at: 'comment:"function [[runproc]]"', say: 'pick the highest-priority ready process', weight: 3 },
+        { at: 'def:proc_wakeup', say: 'the sleeper on a Rendez readied', weight: 2 },
+        { at: 'comment:"function [[reprioritize]]"', say: 'priority from recent CPU use', weight: 1 },
+        { at: 'def:hzsched', say: 'each tick: the quantum used up, preempt', weight: 2 },
+        { at: 'def:newproc', say: 'a Proc from the free list, fresh pid', weight: 2 },
+        { at: 'def:proc_pexit', say: 'exit: waitmsg to the parent, Moribund', weight: 2 },
+        { at: 'def:proc_postnote', say: 'a note (signal) posted, a sleeper interrupted', weight: 1 },
+        { at: 'def:kproc', say: 'a kernel process, with no user space', weight: 1 },
+        { at: 'def:proc_error', say: 'error(): longjmp to the last waserror', weight: 2 },
+      ],
+      links: [
+        { from: 'def:proc_sched', to: 'def:runproc' },
+        { from: 'def:hzsched', to: 'def:preempt' },
+      ],
+      related: ['sysproc.c', '../time/portclock.c', '../concurrency/qlock.c'],
+    },
+    'sysproc.c': {
+      summary: 'The process system calls: rfork, exec (a.out or #!), exits, await, sleep, alarm, notify, rendezvous, brk.',
+      digest: '5246e48d0eb4',
+      capitals: [
+        { at: 'def:sysrfork', say: 'fork, sharing what the flags say' },
+        { at: 'def:sysexec', say: 'a program loaded: new segments, new stack' },
+      ],
+      important: [
+        { at: 'type:Rfork', say: 'what the child shares: memory, fds, namespace', weight: 3 },
+        { at: 'comment:"if no [[RFPROC]], no new proc but property settings"', say: 'no RFPROC: change up itself', weight: 2 },
+        { at: 'comment:"copy or share memory segments"', say: 'RFMEM: data shared, a thread', weight: 2 },
+        { at: 'comment:"Process #! /bin/sh args"', say: 'a script: the interpreter run instead', weight: 2 },
+        { at: 'comment:"build temporary stack segment and qlock seglock"', say: 'argv built on the new stack first', weight: 2 },
+        { at: 'comment:"get text segment ts via demand loading on tc"', say: 'text paged in on faults, from the file', weight: 3 },
+        { at: 'def:sysexits', say: 'exits: pexit with the status', weight: 1 },
+        { at: 'def:sysrendezvous', say: 'two processes exchange a value', weight: 1 },
+        { at: 'def:sysawait', say: "wait for a child's exit message", weight: 1 },
+      ],
+      related: ['../syscalls/systab.c', '../memory/segment.c'],
+    },
+    'pgrp.c': {
+      summary: 'The groups a process shares or copies at rfork: namespace (Pgrp, mounts), fds (Fgrp), rendezvous.',
+      digest: '38eea37840cd',
+      capitals: [
+        { at: 'def:pgrpcpy', say: 'RFNAMEG: the namespace copied' },
+      ],
+      important: [
+        { at: 'def:newpgrp', say: 'an empty namespace', weight: 1 },
+        { at: 'def:dupfgrp', say: 'the fd table copied, each Chan incref', weight: 2 },
+        { at: 'def:closepgrp', say: 'the last user frees the mounts', weight: 1 },
+        { at: 'def:newmount', say: 'a Mount, for the namespace code', weight: 1 },
+      ],
+    },
+    'edf.c': {
+      summary: 'Real-time scheduling, Earliest Deadline First: admission test, release and deadline timers.',
+      digest: '2e62eb50af63',
+      capitals: [
+        { at: 'def:edfadmit', say: 'admitted only if schedulable' },
+      ],
+      important: [
+        { at: 'def:edfready', say: 'an EDF process to the real-time queue', weight: 2 },
+        { at: 'def:releaseintr', say: 'a new period: the deadline set', weight: 2 },
+        { at: 'def:deadlineintr', say: 'the slice used: preempted', weight: 2 },
+        { at: 'def:edfrun', say: 'the deadline timer armed when it runs', weight: 1 },
+        { at: 'code:"testschedulability(Proc *theproc)"', say: 'the admission test, simulated', weight: 2 },
+      ],
+    },
+    'syssema.c': {
+      summary: 'User semaphores: semacquire sleeps until a counter in user memory is positive, semrelease wakes.',
+      digest: '47e145054c33',
+      capitals: [
+        { at: 'def:semacquire', say: 'sleep until the count is positive' },
+      ],
+      important: [
+        { at: 'def:canacquire', say: 'the count decremented atomically (cmpswap)', weight: 2 },
+        { at: 'def:semrelease', say: 'count up, waiters woken', weight: 2 },
+        { at: 'def:tsemacquire', say: 'the same with a timeout', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('Processes: the Proc, the scheduler, the calls', [
+      ['portdat_processes.h', 'the Proc and its groups'],
+      ['proc.c', 'the scheduler: queues, sched, sleep, wakeup'],
+      ['sysproc.c', 'the process system calls'],
+      ['pgrp.c', 'namespaces and fd tables, shared or copied'],
+      ['edf.c', 'real-time scheduling'],
+      ['syssema.c', 'user semaphores'],
+      ['arm/', 'the context switch and the FPU (ARM)'],
+      ['386/', 'the same, and the multiprocessor (x86)'],
+    ], [
+      ['sysproc.c', 'proc.c', 'newproc, ready, sched'],
+      ['sysproc.c', 'pgrp.c', 'rfork: copy or share'],
+      ['proc.c', 'edf.c', 'real-time processes first'],
+      ['syssema.c', 'proc.c', 'sleep, wakeup'],
+      ['proc.c', 'arm/', 'arch_setlabel, arch_gotolabel'],
+      ['proc.c', '386/', 'arch_setlabel, arch_gotolabel'],
+      ['proc.c', 'portdat_processes.h', 'runs on Procs'],
+    ]),
+    // claude: sched, ready, sleep, wakeup are function pointers set in
+    // init/*/main.c to proc_sched, proc_ready...: calls to sched() are
+    // invisible to "called by", hence these joints
+    {
+      name: 'The scheduler: sched, the next process, back',
+      bones: [
+        { at: 'proc.c:def:proc_sched', role: 'save the context, go to schedinit' },
+        { at: 'proc.c:def:schedinit', role: "the CPU's own loop: the old one requeued" },
+        { at: 'proc.c:comment:"function [[runproc]]"', role: 'the next: highest priority ready' },
+        { at: 'proc.c:def:proc_ready', role: 'into its priority run queue' },
+        { at: 'proc.c:def:proc_sleep', role: 'Wakeme until the condition holds' },
+        { at: 'proc.c:def:proc_wakeup', role: 'the sleeper readied' },
+        { at: 'proc.c:def:hzsched', role: 'the tick: quantum used up' },
+      ],
+      joints: [
+        { from: 'proc.c:def:proc_sched', to: 'proc.c:def:schedinit', say: 'gotolabel(cpu->sched)' },
+        { from: 'proc.c:def:schedinit', to: 'proc.c:def:proc_ready', say: 'a Running process back in queue' },
+        { from: 'proc.c:def:schedinit', to: 'proc.c:def:proc_sched', say: 'up = nil: sched picks' },
+        { from: 'proc.c:def:proc_sched', to: 'proc.c:comment:"function [[runproc]]"', say: 'the next process, gotolabel(p->sched)' },
+        { from: 'proc.c:def:proc_sleep', to: 'proc.c:def:proc_sched', say: 'gives up the CPU' },
+        { from: 'proc.c:def:proc_wakeup', to: 'proc.c:def:proc_ready', say: 'the Proc' },
+        { from: 'proc.c:def:hzsched', to: 'proc.c:def:proc_sched', say: 'preempted' },
+      ],
+    },
+    {
+      name: 'rfork and exec',
+      bones: [
+        { at: 'sysproc.c:def:sysrfork', role: 'the flags: what to share' },
+        { at: 'proc.c:def:newproc', role: 'a fresh Proc' },
+        { at: 'pgrp.c:def:dupfgrp', role: 'fds copied' },
+        { at: 'sysproc.c:def:sysexec', role: 'the a.out read, segments made' },
+        { at: 'sysproc.c:def:shargs', role: 'a #! line split' },
+        { at: 'sysproc.c:def:sysexits', role: 'the end: pexit' },
+      ],
+      joints: [
+        { from: 'sysproc.c:def:sysrfork', to: 'proc.c:def:newproc', say: 'RFPROC' },
+        { from: 'sysproc.c:def:sysrfork', to: 'pgrp.c:def:dupfgrp', say: 'RFFDG' },
+        { from: 'sysproc.c:def:sysexec', to: 'sysproc.c:def:shargs', say: 'a script' },
+      ],
+    },
+    {
+      name: 'Namespaces and fds, per group',
+      bones: [
+        { at: 'pgrp.c:def:newpgrp', role: 'an empty namespace' },
+        { at: 'pgrp.c:def:pgrpcpy', role: 'a namespace copied' },
+        { at: 'pgrp.c:def:newmount', role: 'a mount' },
+        { at: 'pgrp.c:def:closepgrp', role: 'freed with its mounts' },
+        { at: 'pgrp.c:def:mountfree', role: 'the mount list freed' },
+        { at: 'pgrp.c:def:dupfgrp', role: 'an fd table copied' },
+        { at: 'pgrp.c:def:closefgrp', role: 'fds closed' },
+      ],
+      joints: [
+        { from: 'pgrp.c:def:pgrpcpy', to: 'pgrp.c:def:newmount', say: 'each mount' },
+        { from: 'pgrp.c:def:closepgrp', to: 'pgrp.c:def:mountfree', say: 'each mount' },
+      ],
+    },
+    {
+      name: 'EDF: admit, release, deadline',
+      bones: [
+        { at: 'edf.c:def:edfadmit', role: 'the task accepted or refused' },
+        { at: 'edf.c:code:"testschedulability(Proc *theproc)"', role: 'the test' },
+        { at: 'edf.c:def:releaseintr', role: 'a period starts' },
+        { at: 'edf.c:def:edfready', role: 'into the real-time queue' },
+        { at: 'edf.c:def:edfrun', role: 'running: deadline armed' },
+        { at: 'edf.c:def:deadlineintr', role: 'the slice spent' },
+      ],
+      joints: [
+        { from: 'edf.c:def:edfadmit', to: 'edf.c:code:"testschedulability(Proc *theproc)"', say: 'schedulable?' },
+        { from: 'edf.c:def:releaseintr', to: 'edf.c:def:edfready', say: 'timer' },
+        { from: 'edf.c:def:edfrun', to: 'edf.c:def:deadlineintr', say: 'timer' },
+        { from: 'edf.c:def:deadlineintr', to: 'edf.c:def:releaseintr', say: 'next period' },
+      ],
+    },
+    {
+      name: 'A semaphore: acquire, sleep, release',
+      bones: [
+        { at: 'syssema.c:def:syssemacquire', role: 'the system call' },
+        { at: 'syssema.c:def:semacquire', role: 'try, else queue and sleep' },
+        { at: 'syssema.c:def:canacquire', role: 'the atomic decrement' },
+        { at: 'syssema.c:def:semqueue', role: 'the waiters' },
+        { at: 'syssema.c:def:semrelease', role: 'count up' },
+        { at: 'syssema.c:def:semwakeup', role: 'waiters woken' },
+      ],
+      joints: [
+        { from: 'syssema.c:def:syssemacquire', to: 'syssema.c:def:semacquire', say: 'the address' },
+        { from: 'syssema.c:def:semacquire', to: 'syssema.c:def:canacquire', say: 'try' },
+        { from: 'syssema.c:def:semacquire', to: 'syssema.c:def:semqueue', say: 'wait' },
+        { from: 'syssema.c:def:semrelease', to: 'syssema.c:def:semwakeup', say: 'n waiters' },
+      ],
+    },
+  ],
+}

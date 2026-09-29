@@ -1,0 +1,121 @@
+// profilers/misc/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Profiler.nw's chapters: time, prof, tprof, kprof, trace, stats.
+local skeletons = import '../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The profilers: time, prof (instrumented), tprof and kprof (sampled), trace and stats (graphical monitors).',
+  files: {
+    'time.c': {
+      summary: 'time: fork and exec a command, then print the user, system and real times wait() returns.',
+      digest: '4832c9681fbd',
+      capitals: [{ at: 'def:main', say: 'fork, exec, wait: the times in the Waitmsg' }],
+      important: [
+        { at: 'code:"w->time[0]"', say: 'the kernel accounted them: user, sys, real', weight: 3 },
+        { at: 'def:notifyf', say: 'an interrupt goes to the child, not to time', weight: 1 },
+      ],
+    },
+    'prof.c': {
+      summary: 'prof: the call tree and times a program linked with 5l -p wrote to prof.out, against its symbols.',
+      digest: 'b3fc4cbb6127',
+      capitals: [{ at: 'def:main', say: 'symbols, then prof.out, then the report' }],
+      important: [
+        { at: 'type:Data', say: 'a prof.out record: pc, callee, sibling, count, time', weight: 3 },
+        { at: 'def:datas', say: 'prof.out read, byte-swapped', weight: 2 },
+        { at: 'def:syms', say: "the a.out's symbols, by libmach", weight: 1 },
+        { at: 'def:graph', say: '-d: the call tree, indented', weight: 2 },
+        { at: 'def:plot', say: 'the flat profile: time per function', weight: 2 },
+        { at: 'def:sum', say: "a node's time added to its function's", weight: 1 },
+      ],
+      links: [{ from: 'def:main', to: 'def:datas' }, { from: 'def:main', to: 'def:plot' }, { from: 'def:plot', to: 'def:sum' }],
+    },
+    'tprof.c': {
+      summary: "tprof: a process's clock-tick samples (/proc/pid/profile) summed per function of its text.",
+      digest: '5582351637ae',
+      capitals: [{ at: 'def:main', say: 'symbols from /proc/pid/text, ticks from profile' }],
+      important: [
+        { at: 'comment:Read symbol table', say: 'libmach: crackhdr, syminit', weight: 2 },
+        { at: 'comment:Read timing data', say: 'a counter per text word, from the kernel', weight: 3 },
+        { at: 'type:COUNTER', say: 'a function and its time', weight: 1 },
+      ],
+    },
+    'kprof.c': {
+      summary: "kprof: the kernel's own pc histogram (#T/kpdata) summed per function of the kernel image.",
+      digest: 'e9d64dc8db68',
+      capitals: [{ at: 'def:main', say: 'kernel symbols, then kpdata, sorted' }],
+      important: [
+        { at: 'code:"textsym(&s, 0)"', say: "the kernel's first text symbol: its base", weight: 2 },
+        { at: 'def:PCRES', say: 'a counter per 8 bytes of text', weight: 1 },
+      ],
+    },
+    'trace.c': {
+      summary: 'trace: the kernel scheduler events (/proc/trace) drawn live, a timeline per traced process.',
+      digest: 'dc32b740df65',
+      capitals: [{ at: 'def:drawtrace', say: 'the loop: events read, tasks drawn' }],
+      important: [
+        { at: 'def:threadmain', say: 'trace turned on per process: "trace 1" to its ctl', weight: 2 },
+        { at: 'type:Task', say: 'a traced process and its events', weight: 2 },
+        { at: 'def:doevent', say: 'an event added to its task', weight: 1 },
+        { at: 'def:redraw', say: 'the timelines drawn with libdraw', weight: 1 },
+        { at: 'def:time2x', say: 'nanoseconds to pixels, by the scale', weight: 1 },
+      ],
+    },
+    'stats.c': {
+      summary: "stats: graphs of a machine's load, memory, syscalls, interrupts, ether... read from /dev/sysstat, redrawn.",
+      digest: '68935d8f162f',
+      capitals: [{ at: 'def:main', say: 'the graphs chosen, then read, draw, sleep' }],
+      important: [
+        { at: 'type:Machine', say: "a machine watched: its files' fds, last values", weight: 3 },
+        { at: 'type:Graph', say: 'a graph: its machine, its value function', weight: 2 },
+        { at: 'def:readmach', say: '/dev/sysstat and others read, a tick', weight: 2 },
+        { at: 'def:newvaluefn', say: 'a value function per kind of graph', weight: 1 },
+        { at: 'def:initmach', say: 'a remote machine through exportfs', weight: 1 },
+        { at: 'def:mouseproc', say: 'a process for the menu: add, drop', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('The profilers: where each reads its numbers', [
+      ['time.c', "a child's times, from wait()"],
+      ['prof.c', 'prof.out, written by the instrumented program'],
+      ['tprof.c', "/proc/pid/profile, the clock's samples"],
+      ['kprof.c', "#T/kpdata, the kernel's samples"],
+      ['trace.c', '/proc/trace, the scheduler events'],
+      ['stats.c', '/dev/sysstat and friends, polled'],
+    ], [
+      ['tprof.c', 'kprof.c', 'the same summing, of the kernel'],
+      ['stats.c', 'trace.c', 'both drawn with libdraw'],
+    ]),
+    skeletons.cmd('prof: an instrumented profile read', 'prof.c:def:main', [
+      ['prof.c:def:syms', 'the symbols of the a.out', 'first'],
+      ['prof.c:def:datas', 'prof.out: the call tree with counts and times', 'then'],
+      ['prof.c:def:plot', 'the flat profile', 'without -d'],
+      ['prof.c:def:sum', 'times summed per function', 'each node'],
+    ]),
+    skeletons.cmd('tprof: a sampled profile read', 'tprof.c:def:main', [
+      ['tprof.c:comment:Read symbol table', 'the symbols, from /proc/pid/text', ''],
+      ['tprof.c:comment:Read timing data', 'the ticks per text word', 'then'],
+      ['tprof.c:def:compar', 'functions sorted by time', 'summed'],
+    ]),
+    skeletons.cmd('kprof: the kernel profiled', 'kprof.c:def:main', [
+      ['kprof.c:code:"textsym(&s, 0)"', "the kernel image's text symbols", ''],
+      ['kprof.c:def:compar', 'functions sorted by time', 'summed'],
+    ]),
+    skeletons.cmd('time: a command timed', 'time.c:def:main', [
+      ['time.c:def:add', 'the times, then the command, into the line', 'wait'],
+      ['time.c:def:output', 'the line printed', 'formatted'],
+    ], main_role='main: fork, exec, wait'),
+    skeletons.cmd('trace: the scheduler watched', 'trace.c:def:threadmain', [
+      ['trace.c:def:drawtrace', 'the loop: /proc/trace read', 'traced'],
+      ['trace.c:def:newtask', 'a process met: its timeline', 'a new pid'],
+      ['trace.c:def:doevent', 'an event recorded', 'each event'],
+      ['trace.c:def:redraw', 'the timelines drawn', 'every so often'],
+    ]),
+    skeletons.cmd('stats: a machine watched', 'stats.c:def:main', [
+      ['stats.c:def:addgraph', 'a graph per flag', 'the flags'],
+      ['stats.c:def:readmach', "each machine's counters read", 'a tick'],
+      ['stats.c:def:newvaluefn', "a graph's value, from them", 'the counters'],
+      ['stats.c:def:drawdatum', 'a new column drawn', 'the value'],
+    ]),
+  ],
+}

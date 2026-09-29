@@ -1,0 +1,172 @@
+// security/auth/secstore/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12). The design: ../../docs/auth.ms, its secstore section.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: "secstore: a network safe for a user's files (factotum's keys), reached with a password proved by PAK.",
+  files: {
+    'secstore.c': {
+      summary: 'The client: log in with a password, then get, put or remove files, each encrypted by the client.',
+      digest: 'd1580df92481',
+      capitals: [
+        { at: 'def:main', say: 'secstore -g factotum: the keys fetched' },
+      ],
+      important: [
+        { at: 'def:login', say: 'dial, PAK, maybe a SecurID code', weight: 3 },
+        { at: 'def:getfile', say: 'a file fetched and decrypted locally', weight: 2 },
+        { at: 'def:putfile', say: 'encrypted before it leaves', weight: 2 },
+        { at: 'def:cmd', say: 'the -g, -p, -r requests', weight: 1 },
+        { at: 'def:chpasswd', say: 'a new password, new PAK verifier', weight: 1 },
+      ],
+    },
+    'secstored.c': {
+      summary: 'The server: listens on tcp!5356, a PAK login per connection, then a user\'s files served.',
+      digest: 'aa898eca7c92',
+      capitals: [
+        { at: 'def:dologin', say: 'a client: PAK, then its commands' },
+      ],
+      important: [
+        { at: 'def:main', say: 'listen, fork per call', weight: 2 },
+        { at: 'code:"PAKserver(conn, S, msg, &pw)"', say: 'the password checked without being sent', weight: 3 },
+        { at: 'code:"secureidcheck(pw->id, msg+3)"', say: 'optional second factor: a token code', weight: 1 },
+        { at: 'def:putfile', say: 'stored as sent: the server never sees plaintext', weight: 2 },
+      ],
+    },
+    'pak.c': {
+      summary: 'PAK (MacKenzie), the password-authenticated key exchange: both sides prove the password, agree a key.',
+      digest: '7dd8900f9fee',
+      capitals: [
+        { at: 'def:PAKclient', say: 'the client side of the exchange' },
+      ],
+      important: [
+        { at: 'comment:"PAK is an encrypted key exchange protocol"', say: 'patented, as all EKE protocols', weight: 2 },
+        { at: 'def:PAK_Hi', say: 'the password to the verifier H', weight: 2 },
+        { at: 'def:PAKserver', say: 'the server side, from the stored verifier', weight: 2 },
+        { at: 'def:shorthash', say: 'the confirmations each side checks', weight: 1 },
+      ],
+    },
+    'SConn.c': {
+      summary: 'SConn over a file descriptor: messages with a length, then encrypted (RC4) and MACed (SHA1) once keyed.',
+      digest: '1934cc82bae0',
+      important: [
+        { at: 'def:newSConn', say: 'a connection: its read, write, secret set', weight: 2 },
+        { at: 'def:SC_secret', say: 'the PAK key splits into two directions', weight: 2 },
+        { at: 'def:SC_read', say: 'a message verified, decrypted', weight: 1 },
+      ],
+    },
+    'SConn.h': {
+      summary: 'SConn, a secure connection as a record of functions: read, write, secret, free.',
+      digest: '81b9aaa8aa6e',
+      important: [
+        { at: 'type:SConn', say: 'methods by pointer', weight: 2 },
+      ],
+    },
+    'secstore.h': {
+      summary: 'The server side\'s shared types: PW, a user\'s account (the PAK verifier, expiry, status).',
+      digest: '172d40dc1cfd',
+      important: [
+        { at: 'code:"} PW;"', say: "an account: its verifier Hi, not the password", weight: 2 },
+      ],
+    },
+    'password.c': {
+      summary: "Accounts on the server: a user's PW read from and written to SECSTORE_DIR/who.",
+      digest: 'db26318c6173',
+    },
+    'dirls.c': {
+      summary: "A user's files listed, each with its size, date and SHA1, for secstore -G.",
+      digest: '899a938a82ed',
+    },
+    'util.c': {
+      summary: 'Helpers: allocation, a password read without echo, file names checked.',
+      digest: '1a540e35f538',
+    },
+    'aescbc.c': {
+      summary: 'aescbc: a file encrypted or decrypted with AES-CBC and an HMAC, the key from a password.',
+      digest: 'cae52e876de6',
+      important: [
+        { at: 'comment:"encrypt file by writing"', say: 'the format: header, IV, AES-CBC, HMAC', weight: 2 },
+      ],
+    },
+    'secchk.c': {
+      summary: 'secchk: a SecurID check from the command line, for testing.',
+      digest: 'f9d03b8b9fd4',
+    },
+    'secuser.c': {
+      summary: 'secuser: a secstore account made or changed on the server (password, expiry, status).',
+      digest: 'aff931321297',
+      important: [
+        { at: 'def:ensure_exists', say: "the user's directory made", weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.parts('secstore: a client and a server, PAK between them', [
+      ['secstore.c', 'the client: login, get, put'],
+      ['secstored.c', 'the server: a login per connection'],
+      ['pak.c', 'PAK: the password proved, a key agreed'],
+      ['SConn.c', 'the encrypted connection after PAK'],
+      ['password.c', "the server's accounts"],
+      ['secuser.c', 'accounts made by the administrator'],
+    ], [
+      ['secstore.c', 'pak.c', 'PAKclient'],
+      ['secstored.c', 'pak.c', 'PAKserver'],
+      ['pak.c', 'SConn.c', 'the session key'],
+      ['pak.c', 'password.c', 'the verifier'],
+      ['secuser.c', 'password.c', 'putPW'],
+    ]),
+    skeletons.cmd('secstore, the client', 'secstore.c:def:main', [
+      ['secstore.c:def:login', 'dial, password, PAK', 'the user'],
+      ['pak.c:def:PAKclient', 'the key exchange', 'the password'],
+      ['secstore.c:def:cmd', 'get, put, remove', 'logged in'],
+      ['secstore.c:def:getfile', 'a file fetched, decrypted', '-g'],
+    ]),
+    skeletons.cmd('secstored, the server', 'secstored.c:def:main', [
+      ['secstored.c:def:dologin', 'a connection: PAK, then commands', 'accept, fork'],
+      ['pak.c:def:PAKserver', 'the password proved by the verifier', 'the id'],
+      ['secstored.c:def:getfile', 'a file sent as stored', 'GET'],
+      ['secstored.c:def:putfile', 'a file stored as received', 'PUT'],
+    ], main_role='main: flags, then listen on tcp!*!5356'),
+    {
+      name: 'pak.c: both sides of PAK',
+      bones: [
+        { at: 'pak.c:def:PAK_Hi', role: 'the password to the verifier' },
+        { at: 'pak.c:def:PAKclient', role: 'the client: mu, then check the server' },
+        { at: 'pak.c:def:PAKserver', role: 'the server: sigma from the verifier' },
+        { at: 'pak.c:def:shorthash', role: 'the confirmations' },
+        { at: 'password.c:def:getPW', role: "the account's verifier" },
+      ],
+      joints: [
+        { from: 'pak.c:def:PAKclient', to: 'pak.c:def:PAK_Hi', say: 'the password' },
+        { from: 'password.c:def:getPW', to: 'pak.c:def:PAKserver', say: 'the stored verifier' },
+        { from: 'pak.c:def:PAKclient', to: 'pak.c:def:shorthash', say: 'the key confirmed' },
+        { from: 'pak.c:def:PAKserver', to: 'pak.c:def:shorthash', say: 'the key confirmed' },
+      ],
+    },
+    {
+      name: 'SConn.c: a connection keyed after PAK',
+      bones: [
+        { at: 'SConn.c:def:newSConn', role: 'the record of functions filled' },
+        { at: 'SConn.c:def:SC_secret', role: 'the keys set: one per direction' },
+        { at: 'SConn.c:def:SC_write', role: 'a message: MAC, encrypt, length' },
+        { at: 'SConn.c:def:SC_read', role: 'a message: length, decrypt, verify' },
+      ],
+      joints: [
+        { from: 'SConn.c:def:newSConn', to: 'SConn.c:def:SC_secret', say: 'conn->secret (a pointer)' },
+        { from: 'SConn.c:def:SC_secret', to: 'SConn.c:def:SC_write', say: 'the keys' },
+        { from: 'SConn.c:def:SC_secret', to: 'SConn.c:def:SC_read', say: 'the keys' },
+      ],
+    },
+    skeletons.cmd('aescbc: a file sealed', 'aescbc.c:def:main', [
+      ['aescbc.c:def:getpassm', 'the password, not echoed', 'a key'],
+      ['aescbc.c:def:safewrite', 'the encrypted blocks and HMAC out', 'AES-CBC'],
+    ]),
+    skeletons.cmd('secchk: a token checked', 'secchk.c:def:main', [
+      ['../secureidcheck.c:def:secureidcheck', 'RADIUS asked about the token', 'user, code'],
+    ]),
+    skeletons.cmd('secuser: an account', 'secuser.c:def:main', [
+      ['secuser.c:def:ensure_exists', "the user's directory", 'the name'],
+      ['password.c:def:putPW', 'the verifier and expiry saved', 'a PW'],
+    ]),
+  ],
+}

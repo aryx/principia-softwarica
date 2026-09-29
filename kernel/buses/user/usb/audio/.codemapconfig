@@ -1,0 +1,131 @@
+// kernel/buses/user/usb/audio/: what the code map says of it (tinybox
+// codemap; the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md,
+// section 12)
+local skeletons = import '../../../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'usb/audio: a USB sound card served as /dev/audio and /dev/volume, with its own 9P server (older than libusb\'s).',
+  files: {
+    'audio.c': {
+      digest: '48fa7a8459df',
+      summary: "usb/audio's main: the card found and its descriptors read, speed and volume set, the file server started.",
+      important: [
+        { at: 'comment:"This needs a full rewrite"', say: "the author's verdict: errors unchecked", weight: 2 },
+        { at: 'def:audio_endpoint', say: "an endpoint's descriptor: the sample rates", weight: 1 },
+        { at: 'def:controlproc', say: 'volume changes, as they come', weight: 1 },
+        { at: 'def:buttonproc', say: "the card's volume buttons", weight: 1 },
+      ],
+    },
+    'audio.h': {
+      digest: 'c6886760d5bd',
+      summary: "USB audio's constants and Audioalt (an alternate setting: channels, resolution, rates).",
+      important: [{ at: 'type:Audioalt', say: 'a format the card can play', weight: 2 }],
+    },
+    'audiosub.c': {
+      digest: '452ec2f747b0',
+      summary: 'The audio class descriptors decoded: terminals, feature units, mixers, the formats of each setting.',
+      important: [
+        { at: 'def:audio_interface', say: 'a class descriptor, by subtype', weight: 3 },
+        { at: 'def:findunit', say: 'units linked by id', weight: 1 },
+      ],
+    },
+    'audioctl.c': {
+      digest: '0f858639ac65',
+      summary: "The card's controls: volume, mute, bass... and speed, which chooses an alternate setting.",
+      important: [
+        { at: 'def:controls', say: 'the table: each control, play and record', weight: 2 },
+        { at: 'def:setcontrol', say: 'a control set by a class request', weight: 3 },
+        { at: 'def:findalt', say: 'the setting with these channels, bits, rate', weight: 2 },
+        { at: 'def:setspeed', say: 'the rate: an alt setting, then the endpoint', weight: 2 },
+        { at: 'def:ctlparse', say: "'volume 50' parsed", weight: 1 },
+      ],
+    },
+    'audioctl.h': {
+      digest: '1c5bd171c4f6',
+      summary: 'Audiocontrol: a control, its range, its current value.',
+    },
+    'audiofs.c': {
+      digest: '2dd88eb0ca74',
+      summary: 'The 9P server: audio (samples to the endpoint), volume (controls as text), audioctl.',
+      important: [
+        { at: 'def:serve', say: 'the pipe posted and mounted', weight: 2 },
+        { at: 'def:io', say: 'the loop: a message, fcalls[type]', weight: 3 },
+        { at: 'def:fcalls', say: 'a function per 9P message', weight: 1 },
+        { at: 'code:"rread(Fid *f)"', say: 'reads: data, or controls as text', weight: 2 },
+        { at: 'code:"rwrite(Fid *f)"', say: 'writes: samples, or "volume 50"', weight: 2 },
+        { at: 'def:readproc', say: 'a blocked read given to a worker', weight: 1 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.cmd('usb/audio: a sound card as files', 'audio.c:def:threadmain', [
+      ['../lib/devs.c:def:finddevs', 'the audio device found', 'the audio class'],
+      ['audiosub.c:def:audio_interface', 'its descriptors decoded', 'each'],
+      ['audioctl.c:def:setcontrol', 'channels, resolution, speed set', 'the defaults'],
+      ['audiofs.c:def:serve', 'the file server', 'a process'],
+      ['audiofs.c:def:io', 'a 9P message served', 'the pipe'],
+    ]),
+    {
+      name: 'A control set',
+      bones: [
+        { at: 'audioctl.c:def:ctlparse', role: 'a line of text' },
+        { at: 'audioctl.c:def:setcontrol', role: 'the control set' },
+        { at: 'audioctl.c:def:controls', role: 'the table' },
+        { at: 'audioctl.c:def:setspeed', role: 'the rate' },
+        { at: 'audioctl.c:def:findalt', role: 'the matching setting' },
+      ],
+      joints: [
+        { from: 'audioctl.c:def:ctlparse', to: 'audioctl.c:def:setcontrol', say: 'name and value' },
+        { from: 'audioctl.c:def:setcontrol', to: 'audioctl.c:def:controls', say: 'updated' },
+        { from: 'audioctl.c:def:setcontrol', to: 'audioctl.c:def:setspeed', say: "'speed'" },
+        { from: 'audioctl.c:def:setspeed', to: 'audioctl.c:def:findalt', say: 'channels, bits, rate' },
+      ],
+    },
+    {
+      name: 'The descriptors',
+      bones: [
+        { at: 'audiosub.c:def:audio_interface', role: 'a descriptor' },
+        { at: 'audiosub.c:def:findunit', role: 'its unit' },
+        { at: 'audiosub.c:def:namefor', role: 'a terminal named' },
+        { at: 'audio.h:type:Audioalt', role: 'a setting recorded' },
+      ],
+      joints: [
+        { from: 'audiosub.c:def:audio_interface', to: 'audiosub.c:def:findunit', say: 'by id' },
+        { from: 'audiosub.c:def:audio_interface', to: 'audiosub.c:def:namefor', say: 'terminal types' },
+        { from: 'audiosub.c:def:audio_interface', to: 'audio.h:type:Audioalt', say: 'FORMAT_TYPE' },
+      ],
+    },
+    {
+      name: 'The 9P server',
+      bones: [
+        { at: 'audiofs.c:def:serve', role: 'posted, mounted' },
+        { at: 'audiofs.c:def:io', role: 'the message loop' },
+        { at: 'audiofs.c:def:fcalls', role: 'the dispatch table' },
+        { at: 'audiofs.c:code:"rread(Fid *f)"', role: 'a read' },
+        { at: 'audiofs.c:def:readproc', role: 'a worker for blocking reads' },
+        { at: 'audiofs.c:code:"rwrite(Fid *f)"', role: 'a write' },
+      ],
+      joints: [
+        { from: 'audiofs.c:def:serve', to: 'audiofs.c:def:io', say: 'a process' },
+        { from: 'audiofs.c:def:io', to: 'audiofs.c:def:fcalls', say: 'the message type' },
+        { from: 'audiofs.c:def:fcalls', to: 'audiofs.c:code:"rread(Fid *f)"', say: 'Tread' },
+        { from: 'audiofs.c:def:fcalls', to: 'audiofs.c:code:"rwrite(Fid *f)"', say: 'Twrite' },
+        { from: 'audiofs.c:code:"rread(Fid *f)"', to: 'audiofs.c:def:readproc', say: 'would block' },
+      ],
+    },
+    {
+      name: "usb/audio's main",
+      bones: [
+        { at: 'audio.c:def:threadmain', role: 'setup' },
+        { at: 'audio.c:def:audio_endpoint', role: 'endpoint descriptors' },
+        { at: 'audio.c:def:controlproc', role: 'control changes' },
+        { at: 'audio.c:def:buttonproc', role: 'buttons read' },
+      ],
+      joints: [
+        { from: 'audio.c:def:threadmain', to: 'audio.c:def:audio_endpoint', say: 'each descriptor' },
+        { from: 'audio.c:def:threadmain', to: 'audio.c:def:controlproc', say: 'a process' },
+        { from: 'audio.c:def:buttonproc', to: 'audio.c:def:controlproc', say: 'controlchan' },
+      ],
+    },
+  ],
+}

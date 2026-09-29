@@ -1,0 +1,199 @@
+// kernel/init/arm/: what the code map says of it (tinybox codemap; the
+// format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12).
+// Book: kernel/Kernel.nw, "Booting overview (ARM)" and chapter Initialization.
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'The boot on a Raspberry Pi: from the firmware at 0x8000 to the MMU on, main(), and the first process.',
+  files: {
+    'main.c': {
+      digest: '52ec228ad1de',
+      summary: "The kernel's main: the machine found (Conf), each subsystem initialized, the first process crafted, the scheduler started.",
+      capitals: [
+        { at: 'def:main', say: 'the kernel starts here: init, then schedinit' },
+        { at: 'def:arch__userinit', say: 'the first process, crafted by hand' },
+      ],
+      important: [
+        { at: 'comment:"backward deps breaker!"', say: 'print, error, sleep...: pointers set first', weight: 2 },
+        { at: 'code:"cpu = (Cpu*)CPUADDR"', say: "cpu0's Cpu: a fixed page, below the kernel", weight: 2 },
+        { at: 'def:arch__confinit', say: 'memory sized: kernel and user pages split', weight: 3 },
+        { at: 'code:"chandevreset()"', say: 'every device reset: most are found here', weight: 2 },
+        { at: 'code:"schedinit()"', say: 'never returns: the scheduler takes over', weight: 3 },
+        { at: 'code:"memmove(UINT2PTR(VA(k)), initcode, sizeof initcode)"', say: "initcode's bytes: the process's one text page", weight: 3 },
+        { at: 'code:"p->sched.pc = PTR2UINT(init0)"', say: 'first scheduled, it runs init0 in the kernel', weight: 2 },
+        { at: 'def:init0', say: 'root and dot, env from plan9.ini, then touser', weight: 3 },
+        { at: 'def:launchinit', say: 'the other cores: a Cpu and an L1 each', weight: 1 },
+        { at: 'def:shutdown', say: 'reboot and halt: other cores stopped', weight: 1 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:arch__confinit' },
+        { from: 'def:main', to: 'def:arch__userinit' },
+        { from: 'def:arch__userinit', to: 'def:init0' },
+      ],
+      related: ['start.s', 'startv6.s', '../user/preboot/initcode.c', '../../core/portfns.c', '../../conf/arm/pi'],
+    },
+    'start.s': {
+      digest: 'f42501bf67a5',
+      summary: 'The very first instructions (cpu0): SVC mode, interrupts off, a stack in the Cpu page, then armstart.',
+      important: [
+        { at: 'comment:"function [[_start]](arm)"', say: 'the kernel entry, at physical 0x8000', weight: 3 },
+        { at: 'comment:"load physical base for SB addressing"', say: 'linked at KZERO, running at 0: SB adjusted', weight: 2 },
+      ],
+    },
+    'startv6.s': {
+      digest: '10d5311a93ef',
+      summary: 'armstart for the Pi 1 (ARMv6): caches off, page tables built by mmuinit, the MMU on, then main.',
+      important: [
+        { at: 'comment:"function [[armstart]](raspberry pi1)(arm)"', say: 'the MMU enabled, still running at low addresses', weight: 3 },
+        { at: 'def:_ramZ', say: 'the Cpu page and page tables zeroed', weight: 1 },
+        { at: 'comment:"function [[_startpg]](raspberry pi1)(arm)"', say: 'now at KZERO: BL main', weight: 2 },
+      ],
+    },
+    'startv7.s': {
+      digest: 'd4705942ff13',
+      summary: 'armstart for the Pi 2 (four Cortex-A7): the same, plus cpureset where the other cores enter.',
+      important: [
+        { at: 'comment:"function [[armstart]](raspberry pi2)(arm)"', say: 'cpu0: caches, MMU, then _startpg', weight: 3 },
+        { at: 'comment:"function [[_startpg]](raspberry pi2)(arm)"', say: 'virtual at last: BL main', weight: 2 },
+        { at: 'comment:"function [[cpureset]](raspberry pi2)(arm)"', say: 'cores 1-3: woken by raspi2.c, same MMU dance', weight: 2 },
+        { at: 'comment:"function [[_startpg2]](raspberry pi2)(arm)"', say: 'to cpustart, not main', weight: 1 },
+      ],
+    },
+    'bootconf.c': {
+      digest: '820281f71734',
+      summary: "The boot parameters: the bootloader's ATAGs and cmdline.txt read as plan9.ini variables; the first process's argv.",
+      important: [
+        { at: 'def:ataginit', say: 'the bootloader tags: memory size, command line', weight: 3 },
+        { at: 'def:plan9iniinit', say: 'name=value lines into confname/confval', weight: 2 },
+        { at: 'def:bootargs', say: "/boot/boot's argv pushed on its stack", weight: 2 },
+        { at: 'def:writeconf', say: 'the variables handed to a rebooted kernel', weight: 1 },
+      ],
+    },
+    'raspi1.c': {
+      digest: '375510cfd5cc',
+      summary: 'The Pi 1 (BCM2835) specifics: its Soc addresses, one CPU, its cpu name.',
+    },
+    'raspi2.c': {
+      digest: '5cd6eb492ee4',
+      summary: 'The Pi 2 (BCM2836) specifics: its Soc addresses, and the other three cores started through mailboxes.',
+      important: [
+        { at: 'def:startcpus', say: 'each core woken, waited for', weight: 3 },
+        { at: 'def:startcpu', say: "a core's mailbox given cpureset's address", weight: 2 },
+        { at: 'def:cpustart', say: 'a secondary core in C: its MMU, then schedinit', weight: 3 },
+      ],
+    },
+    'watchdog.c': {
+      digest: '9d0dd3b480c1',
+      summary: "The BCM watchdog: reset and reboot by letting it bite, fed from the clock.",
+      important: [
+        { at: 'def:archreboot', say: 'a reboot: the watchdog set to fire now', weight: 2 },
+      ],
+    },
+    'rebootcode.s': {
+      digest: '7f7a5d751811',
+      summary: 'The new kernel copied over the old: MMU and caches off, a memmove, a jump to its entry.',
+      important: [
+        { at: 'comment:"function main(rebootcode.s)(arm)"', say: 'runs from a copy, the old kernel overwritten', weight: 2 },
+      ],
+    },
+  },
+  skeletons: [
+    skeletons.chain('The ARM boot: firmware to the scheduler', [
+      ['start.s:comment:"function [[_start]](arm)"', 'entered at 0x8000: SVC mode, a stack', ''],
+      ['startv6.s:comment:"function [[armstart]](raspberry pi1)(arm)"', 'caches off, page tables, MMU on (v7: startv7.s)', 'BL armstart'],
+      ['startv6.s:comment:"function [[_startpg]](raspberry pi1)(arm)"', 'running at KZERO', 'a jump, virtual'],
+      ['main.c:def:main', 'every subsystem initialized', 'BL main'],
+      ['main.c:def:arch__userinit', 'the first process, ready', 'calls'],
+      ['main.c:code:"schedinit()"', 'the scheduler: picks the first process', 'then'],
+      ['main.c:def:init0', 'in that process: namespace root, then user mode', 'its sched.pc'],
+    ]),
+    {
+      name: 'The kernel main (main.c)',
+      bones: [
+        { at: 'main.c:def:main', role: 'the order of the initializations' },
+        { at: 'main.c:def:arch__cpu0init', role: "cpu0's Cpu" },
+        { at: 'main.c:def:arch__confinit', role: 'Conf: memory banks, nproc, upages' },
+        { at: 'main.c:def:arch__userinit', role: 'the first process, initcode in its text' },
+        { at: 'main.c:def:launchinit', role: 'the other cores' },
+        { at: 'main.c:def:init0', role: 'first process, kernel side' },
+        { at: '../../memory/xalloc.c:def:xinit', role: "the kernel's first allocator" },
+        { at: '../../processes/proc.c:def:schedinit', role: 'the scheduler loop' },
+      ],
+      joints: [
+        { from: 'main.c:def:main', to: 'main.c:def:arch__cpu0init', say: 'first' },
+        { from: 'main.c:def:main', to: 'main.c:def:arch__confinit', say: 'memory size' },
+        { from: 'main.c:def:arch__confinit', to: '../../memory/xalloc.c:def:xinit', say: 'Conf.mem' },
+        { from: 'main.c:def:main', to: 'main.c:def:arch__userinit', say: 'after devices' },
+        { from: 'main.c:def:main', to: 'main.c:def:launchinit', say: 'Pi 2: 3 more cores' },
+        { from: 'main.c:def:main', to: '../../processes/proc.c:def:schedinit', say: 'never returns' },
+        { from: '../../processes/proc.c:def:schedinit', to: 'main.c:def:init0', say: 'the first process scheduled' },
+      ],
+    },
+    {
+      name: 'Boot parameters (bootconf.c)',
+      bones: [
+        { at: 'bootconf.c:def:ataginit', role: "the bootloader's tags" },
+        { at: 'bootconf.c:def:plan9iniinit', role: 'the command line as variables' },
+        { at: 'bootconf.c:def:addconf', role: 'one name=value kept' },
+        { at: 'bootconf.c:def:writeconf', role: 'for the next kernel' },
+        { at: 'bootconf.c:def:bootargs', role: "the first process's arguments" },
+      ],
+      joints: [
+        { from: 'bootconf.c:def:ataginit', to: 'bootconf.c:def:plan9iniinit', say: 'ATAG_CMDLINE' },
+        { from: 'bootconf.c:def:plan9iniinit', to: 'bootconf.c:def:addconf', say: 'each variable' },
+      ],
+    },
+    {
+      name: 'The other cores (raspi2.c, startv7.s)',
+      bones: [
+        { at: 'raspi2.c:def:startcpus', role: 'each core, in turn' },
+        { at: 'raspi2.c:def:startcpu', role: 'a mailbox written' },
+        { at: 'startv7.s:comment:"function [[cpureset]](raspberry pi2)(arm)"', role: 'the core wakes here' },
+        { at: 'startv7.s:comment:"function [[_startpg2]](raspberry pi2)(arm)"', role: 'virtual addresses' },
+        { at: 'raspi2.c:def:cpustart', role: 'in C: its Cpu, then the scheduler' },
+      ],
+      joints: [
+        { from: 'raspi2.c:def:startcpus', to: 'raspi2.c:def:startcpu', say: 'cpu n' },
+        { from: 'raspi2.c:def:startcpu', to: 'startv7.s:comment:"function [[cpureset]](raspberry pi2)(arm)"', say: "cpureset's address" },
+        { from: 'startv7.s:comment:"function [[cpureset]](raspberry pi2)(arm)"', to: 'startv7.s:comment:"function [[_startpg2]](raspberry pi2)(arm)"', say: 'MMU on' },
+        { from: 'startv7.s:comment:"function [[_startpg2]](raspberry pi2)(arm)"', to: 'raspi2.c:def:cpustart', say: 'BL cpustart' },
+      ],
+    },
+    {
+      name: 'cpu0 on the Pi 2 (startv7.s)',
+      bones: [
+        { at: 'startv7.s:comment:"function [[armstart]](raspberry pi2)(arm)"', role: 'caches and MMU' },
+        { at: 'startv7.s:def:_ramZ', role: 'the Cpu page zeroed' },
+        { at: 'startv7.s:comment:"function [[_startpg]](raspberry pi2)(arm)"', role: 'virtual: to main' },
+        { at: 'startv7.s:comment:"function [[cpureset]](raspberry pi2)(arm)"', role: 'the other cores' },
+        { at: 'main.c:def:main', role: 'the kernel' },
+      ],
+      joints: [
+        { from: 'startv7.s:comment:"function [[armstart]](raspberry pi2)(arm)"', to: 'startv7.s:def:_ramZ', say: 'first' },
+        { from: 'startv7.s:comment:"function [[armstart]](raspberry pi2)(arm)"', to: 'startv7.s:comment:"function [[_startpg]](raspberry pi2)(arm)"', say: 'MMU on' },
+        { from: 'startv7.s:comment:"function [[_startpg]](raspberry pi2)(arm)"', to: 'main.c:def:main', say: 'BL main' },
+      ],
+    },
+    skeletons.parts('The ARM boot files', [
+      ['start.s', 'the entry'],
+      ['startv6.s', 'Pi 1: MMU on'],
+      ['startv7.s', 'Pi 2: MMU on, other cores'],
+      ['main.c', 'the kernel main'],
+      ['bootconf.c', 'the boot parameters'],
+      ['raspi1.c', 'Pi 1 specifics'],
+      ['raspi2.c', 'Pi 2 specifics, the other cores'],
+      ['watchdog.c', 'reset, reboot'],
+      ['rebootcode.s', 'a new kernel loaded'],
+    ], [
+      ['start.s', 'startv6.s', 'armstart'],
+      ['start.s', 'startv7.s', 'armstart'],
+      ['startv6.s', 'main.c', 'main'],
+      ['startv7.s', 'main.c', 'main'],
+      ['main.c', 'bootconf.c', 'getconf, bootargs'],
+      ['main.c', 'raspi2.c', 'startcpus'],
+      ['raspi2.c', 'startv7.s', 'cpureset'],
+      ['main.c', 'watchdog.c', 'archreboot'],
+      ['main.c', 'rebootcode.s', 'reboot'],
+    ]),
+  ],
+}

@@ -1,0 +1,131 @@
+// networking/dhcp/dhcpd/: what the code map says of it (tinybox codemap;
+// the format: ~/github/ocaml-elm-playground/docs/manual/codemap.md, section 12)
+local skeletons = import '../../../skeletons.libsonnet';
+{
+  generated: { by: 'claude-opus-5-5', on: '2026-09-29' },
+  summary: 'dhcpd: the DHCP and BOOTP server; static addresses from ndb, dynamic ones leased from a pool kept in files.',
+  files: {
+    'dhcpd.c': {
+      summary: 'dhcpd: requests read on udp 67, dispatched by message type, offers and acks built with their options.',
+      digest: '2e7cb25624f0',
+      capitals: [{ at: 'def:main', say: 'listen on 67, a request at a time' }],
+      important: [
+        { at: 'type:Req', say: 'a request and the reply being built', weight: 2 },
+        { at: 'def:proto', say: 'a packet checked: DHCP or plain BOOTP', weight: 2 },
+        { at: 'def:dhcp', say: 'by message type', weight: 1 },
+        { at: 'def:rcvdiscover', say: 'an address found: static, or offered from the pool', weight: 3 },
+        { at: 'def:rcvrequest', say: 'the offer committed, or NAKed', weight: 3 },
+        { at: 'def:miscoptions', say: 'router, dns, fs, auth: from ndb', weight: 1 },
+        { at: 'def:bootp', say: 'old BOOTP: static only, a boot file', weight: 1 },
+      ],
+      links: [
+        { from: 'def:main', to: 'def:proto' },
+        { from: 'def:dhcp', to: 'def:rcvdiscover' },
+        { from: 'def:dhcp', to: 'def:rcvrequest' },
+      ],
+    },
+    'db.c': {
+      summary: 'The lease database: a file per address in /lib/ndb/dhcp, locked, read, offered, committed.',
+      digest: '2f87e29e2063',
+      capitals: [{ at: 'def:idtooffer', say: 'a free address offered to a client id' }],
+      important: [
+        { at: 'comment:format of a binding entry', say: "a lease: address, client id, hardware, time", weight: 1 },
+        { at: 'def:syncbinding', say: 'the file read again: another dhcpd may have changed it', weight: 2 },
+        { at: 'def:commitbinding', say: 'the lease written', weight: 2 },
+        { at: 'code:"icmpecho"', say: 'an address pinged before it is offered', weight: 1 },
+      ],
+    },
+    'ndb.c': {
+      summary: "ndb for dhcpd: a client's static entry by hardware address, the subnet's options, the servers.",
+      digest: '45c719332c24',
+      capitals: [{ at: 'def:lookup', say: 'ether= or id= to an Info' }],
+      important: [
+        { at: 'def:lookupip', say: 'an IP to its whole Info, subnets inherited', weight: 2 },
+        { at: 'def:forme', say: 'is this address one of ours?', weight: 1 },
+      ],
+    },
+    'dat.h': {
+      summary: "dhcpd's types: Binding (a lease) and Info (what ndb says of an address).",
+      digest: '42eaf544169c',
+      capitals: [{ at: 'type:Binding', say: 'a lease' }],
+      important: [{ at: 'type:Info', say: 'an address and its options', weight: 1 }],
+    },
+    'ping.c': {
+      summary: 'icmpecho: is an address already in use?',
+      digest: 'c11d9a476e98',
+    },
+    'dhcpleases.c': {
+      summary: 'dhcpleases: the current leases listed.',
+      digest: 'cb3938787e86',
+      capitals: [{ at: 'def:main', say: 'the binding files read' }],
+    },
+    'testlook.c': {
+      summary: 'testlook: a test of ndb lookups, an address and its inherited subnet attributes.',
+      digest: '748e1a7afffd',
+      capitals: [{ at: 'def:main', say: 'a lookup printed' }],
+    },
+    'testlookup.c': {
+      summary: 'testlookup: a test of the server lookups (dns, fs...) for an address.',
+      digest: '7344914c0ac6',
+      capitals: [{ at: 'def:main', say: 'servers printed' }],
+    },
+    'testping.c': {
+      summary: 'testping: a test of icmpecho.',
+      digest: 'dacbf8b42d9c',
+      capitals: [{ at: 'def:main', say: 'an address pinged' }],
+    },
+  },
+  skeletons: [
+    skeletons.cmd('dhcpd: an address handed out', 'dhcpd.c:def:main', [
+      ['dhcpd.c:def:proto', 'a request checked', 'udp 67'],
+      ['dhcpd.c:def:dhcp', 'DISCOVER, REQUEST, RELEASE...', 'DHCP'],
+      ['dhcpd.c:def:rcvdiscover', 'an address chosen', 'DISCOVER'],
+      ['ndb.c:def:lookup', 'a static one from ndb', 'the hardware address'],
+      ['db.c:def:idtooffer', 'or a lease from the pool', 'none'],
+      ['dhcpd.c:def:sendoffer', 'the OFFER sent', 'the address'],
+    ]),
+    {
+      name: 'The leases: db.c',
+      bones: [
+        { at: 'db.c:def:iptobinding', role: 'a lease by address' },
+        { at: 'db.c:def:idtooffer', role: 'a lease for a client' },
+        { at: 'db.c:def:syncbinding', role: 'its file reread' },
+        { at: 'db.c:def:mkoffer', role: 'offered, for a while' },
+        { at: 'db.c:def:commitbinding', role: 'committed' },
+      ],
+      joints: [
+        { from: 'db.c:def:idtooffer', to: 'db.c:def:syncbinding', say: 'each candidate' },
+        { from: 'db.c:def:idtooffer', to: 'db.c:def:mkoffer', say: 'a free one' },
+        { from: 'db.c:def:mkoffer', to: 'db.c:def:commitbinding', say: 'on REQUEST' },
+      ],
+    },
+    {
+      name: 'ndb lookups: ndb.c',
+      bones: [
+        { at: 'ndb.c:def:opendb', role: 'the database' },
+        { at: 'ndb.c:def:lookup', role: 'a client by hardware address' },
+        { at: 'ndb.c:def:lookupip', role: 'an address to its Info' },
+        { at: 'ndb.c:def:lookupserver', role: 'dns, fs, auth servers' },
+      ],
+      joints: [
+        { from: 'ndb.c:def:lookup', to: 'ndb.c:def:lookupip', say: 'ip=' },
+        { from: 'ndb.c:def:lookupip', to: 'ndb.c:def:opendb', say: 'ndbipinfo' },
+      ],
+    },
+    skeletons.cmd('dhcpleases', 'dhcpleases.c:def:main', [['db.c:def:syncbinding', 'each binding read', '/lib/ndb/dhcp']]),
+    skeletons.cmd('testlook', 'testlook.c:def:main', [['testlook.c:def:ipinfo', 'an address looked up', 'argv']]),
+    skeletons.cmd('testlookup', 'testlookup.c:def:main', [['testlookup.c:def:lookupserver', 'servers looked up', 'argv']]),
+    skeletons.cmd('testping', 'testping.c:def:main', [['ping.c:def:icmpecho', 'an echo', 'argv']]),
+    skeletons.parts('dhcpd', [
+      ['dhcpd.c', 'the protocol'],
+      ['ndb.c', 'static addresses and options'],
+      ['db.c', 'dynamic leases'],
+      ['ping.c', 'addresses checked free'],
+      ['dat.h', 'Binding, Info'],
+    ], [
+      ['dhcpd.c', 'ndb.c', 'the client'],
+      ['dhcpd.c', 'db.c', 'a lease'],
+      ['db.c', 'ping.c', 'before offering'],
+    ]),
+  ],
+}
