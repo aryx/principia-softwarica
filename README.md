@@ -34,13 +34,6 @@ Plan 9 is so elegant and small that you can realistically understand
 the whole operating system. In fact, I explained the whole code in my
 Principia Softwarica book series (see <https://principia-softwarica.org>).
 
-The whole source can be explored in the browser in its
-[code map](https://principia-softwarica.org/codemap.html): each folder
-a region, each file a block the size of its code, and the code itself
-once you zoom in.
-
-[![The code map of Principia Softwarica: every folder a region, every file a block](docs/pics/codemap.png)](https://principia-softwarica.org/codemap.html)
-
 This fork, because it is used to support my Principia Softwarica
 book series, contains only the essential programs used by a programmer
 (e.g., compiler, linker, assembler, kernel, windowing system).
@@ -49,6 +42,27 @@ I've selected only what I consider to be the essence of an operating system.
 Moreover, this fork supports only the ARM and x86 architectures. Even though
 the original Plan 9 supported more architectures, I think ARM and x86 are
 enough for the educational purpose of Principia Softwarica.
+
+## The code map
+
+The [code map](https://principia-softwarica.org/codemap.html) shows
+the whole source as a map, in the browser: each folder a region, each
+file a block the size of its code, each block the code itself once you
+zoom in. `x` shows each program's skeleton, `/` searches, a click on a
+name shows its definition, `g` the dependencies between the parts, `h`
+every key.
+
+[![The code map of Principia Softwarica: every folder a region, every file a block](docs/pics/codemap.png)](https://principia-softwarica.org/codemap.html)
+
+A link can open it anywhere:
+[the kernel](https://principia-softwarica.org/codemap.html?focus=kernel),
+[the shell](https://principia-softwarica.org/codemap.html?focus=shells),
+[the kernel's scheduler](https://principia-softwarica.org/codemap.html?focus=kernel&def=proc_sched).
+It is tinybox's code map, from
+[ocaml-elm-playground](https://github.com/aryx/ocaml-elm-playground),
+after my [codemap](https://github.com/aryx/codemap); what it says of
+each part comes from the `.codemapconfig` files in each directory,
+written by Claude Code from the code and the books.
 
 ## AI disclaimer
 
