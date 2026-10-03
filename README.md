@@ -34,6 +34,13 @@ Plan 9 is so elegant and small that you can realistically understand
 the whole operating system. In fact, I explained the whole code in my
 Principia Softwarica book series (see <https://principia-softwarica.org>).
 
+The whole source can be explored in the browser in its
+[code map](https://principia-softwarica.org/codemap.html): each folder
+a region, each file a block the size of its code, and the code itself
+once you zoom in.
+
+[![The code map of Principia Softwarica: every folder a region, every file a block](docs/pics/codemap.png)](https://principia-softwarica.org/codemap.html)
+
 This fork, because it is used to support my Principia Softwarica
 book series, contains only the essential programs used by a programmer
 (e.g., compiler, linker, assembler, kernel, windowing system).
