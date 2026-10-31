@@ -23,6 +23,9 @@
  *    The FDA urged consumers who have experienced problems with Rio
  * to notify their local FDA office, local health department or the
  * company at 1‑800‑543‑3002.
+ *
+ * See ( https://en.wikipedia.org/wiki/Rio_Hair_Naturalizer_System ) 
+ * for what was ``rio''...
  */
 
 /*s: global [[fontname]] */
